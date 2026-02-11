@@ -42,7 +42,7 @@ export function Sidebar() {
             <Settings className="h-5 w-5 text-primary-foreground animate-spin-slow" />
           </div>
           <h1 className="font-display text-2xl font-bold tracking-tight text-primary">
-            AUTOPARTS<span className="text-accent">.IO</span>
+            TRUCKGEAR<span className="text-accent">.IO</span>
           </h1>
         </div>
       </div>
