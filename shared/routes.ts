@@ -161,6 +161,17 @@ export const api = {
       input: updateStatusSchema,
       responses: { 200: z.any() },
     },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/sales-orders/:id' as const,
+      input: salesOrderWithItemsSchema,
+      responses: { 200: z.any(), 404: errorSchemas.notFound },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/sales-orders/:id' as const,
+      responses: { 200: z.object({ message: z.string() }), 404: errorSchemas.notFound },
+    },
   },
   purchaseOrders: {
     list: {

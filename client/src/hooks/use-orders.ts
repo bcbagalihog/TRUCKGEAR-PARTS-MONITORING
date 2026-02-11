@@ -70,6 +70,51 @@ export function useUpdateSalesStatus() {
   });
 }
 
+export function useUpdateSalesOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: SalesOrderInput }) => {
+      const url = buildUrl(api.salesOrders.update.path, { id });
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to update order");
+      }
+      return await res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [api.salesOrders.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.salesOrders.get.path, variables.id] });
+    },
+  });
+}
+
+export function useDeleteSalesOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const url = buildUrl(api.salesOrders.delete.path, { id });
+      const res = await fetch(url, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to delete order");
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.salesOrders.list.path] });
+    },
+  });
+}
+
 // === PURCHASE ORDERS ===
 
 export function usePurchaseOrders() {

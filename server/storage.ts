@@ -35,6 +35,8 @@ export interface IStorage extends IAuthStorage {
   getSalesOrder(id: number): Promise<SalesOrderWithDetails | undefined>;
   createSalesOrder(order: InsertSalesOrder, items: InsertSalesOrderItem[]): Promise<SalesOrderWithDetails>;
   updateSalesOrderStatus(id: number, status: string): Promise<SalesOrderWithDetails>;
+  updateSalesOrder(id: number, order: Partial<InsertSalesOrder>, items: InsertSalesOrderItem[]): Promise<SalesOrderWithDetails>;
+  deleteSalesOrder(id: number): Promise<void>;
 
   // Purchase Orders
   getPurchaseOrders(): Promise<PurchaseOrderWithDetails[]>;
@@ -254,6 +256,36 @@ export class DatabaseStorage implements IStorage {
         where: eq(salesOrders.id, id),
         with: { customer: true, items: { with: { product: true } } }
       })) as SalesOrderWithDetails;
+    });
+  }
+
+  async updateSalesOrder(id: number, order: Partial<InsertSalesOrder>, items: InsertSalesOrderItem[]): Promise<SalesOrderWithDetails> {
+    return await db.transaction(async (tx) => {
+      const totalAmount = items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitPrice)), 0);
+
+      await tx.update(salesOrders)
+        .set({ ...order, totalAmount: String(totalAmount) })
+        .where(eq(salesOrders.id, id));
+
+      await tx.delete(salesOrderItems).where(eq(salesOrderItems.salesOrderId, id));
+
+      if (items.length > 0) {
+        await tx.insert(salesOrderItems).values(
+          items.map(item => ({ ...item, salesOrderId: id }))
+        );
+      }
+
+      return (await tx.query.salesOrders.findFirst({
+        where: eq(salesOrders.id, id),
+        with: { customer: true, items: { with: { product: true } } }
+      })) as SalesOrderWithDetails;
+    });
+  }
+
+  async deleteSalesOrder(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(salesOrderItems).where(eq(salesOrderItems.salesOrderId, id));
+      await tx.delete(salesOrders).where(eq(salesOrders.id, id));
     });
   }
 

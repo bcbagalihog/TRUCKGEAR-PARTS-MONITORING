@@ -111,6 +111,34 @@ export async function registerRoutes(
     res.json(order);
   });
 
+  app.put(api.salesOrders.update.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getSalesOrder(id);
+      if (!existing) return res.status(404).json({ message: "Order not found" });
+      if (existing.status === 'invoiced') return res.status(400).json({ message: "Cannot edit an invoiced order" });
+      const { items, ...orderData } = api.salesOrders.update.input.parse(req.body);
+      const order = await storage.updateSalesOrder(id, orderData, items);
+      res.json(order);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json(e.errors);
+      throw e;
+    }
+  });
+
+  app.delete(api.salesOrders.delete.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getSalesOrder(id);
+      if (!existing) return res.status(404).json({ message: "Order not found" });
+      if (existing.status === 'invoiced') return res.status(400).json({ message: "Cannot delete an invoiced order" });
+      await storage.deleteSalesOrder(id);
+      res.json({ message: "Order deleted" });
+    } catch (e: any) {
+      throw e;
+    }
+  });
+
   // --- Purchase Orders ---
   app.get(api.purchaseOrders.list.path, async (req, res) => {
     const orders = await storage.getPurchaseOrders();
