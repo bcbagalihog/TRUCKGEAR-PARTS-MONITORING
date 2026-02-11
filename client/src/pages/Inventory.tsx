@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Layout } from "@/components/Layout";
 import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/use-products";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Loader2, Pencil, Trash2, ImagePlus, X } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,7 @@ const productFormSchema = z.object({
   costPrice: z.coerce.number().min(0),
   sellingPrice: z.coerce.number().min(0),
   location: z.string().optional(),
+  imageUrl: z.string().nullable().optional(),
   oemNumbers: z.array(z.string()).optional(),
   compatibility: z.array(z.object({
     make: z.string().min(1),
@@ -34,6 +35,99 @@ const productFormSchema = z.object({
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
+
+function ImageUpload({ value, onChange }: { value: string | null | undefined; onChange: (url: string | null) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(value || null);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+
+    const localPreview = URL.createObjectURL(file);
+    setPreview(localPreview);
+    setUploading(true);
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      URL.revokeObjectURL(localPreview);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(errData.message || "Upload failed");
+      }
+      const data = await res.json();
+      setPreview(data.imageUrl);
+      onChange(data.imageUrl);
+    } catch (err: any) {
+      URL.revokeObjectURL(localPreview);
+      setPreview(value || null);
+      onChange(value || null);
+      setError(err.message || "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = () => {
+    setPreview(null);
+    onChange(null);
+    setError(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  return (
+    <div className="flex items-start gap-3">
+      <div
+        className="relative w-20 h-20 rounded-md border-2 border-dashed border-muted-foreground/30 flex items-center justify-center overflow-hidden cursor-pointer bg-muted/20"
+        onClick={() => fileInputRef.current?.click()}
+        data-testid="button-upload-image"
+      >
+        {uploading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : preview ? (
+          <img src={preview} alt="Product" className="w-full h-full object-cover" />
+        ) : (
+          <ImagePlus className="h-6 w-6 text-muted-foreground/50" />
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="hidden"
+          onChange={handleFileChange}
+          data-testid="input-product-image"
+        />
+      </div>
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">Click to upload product image</span>
+        <span className="text-xs text-muted-foreground">JPG, PNG, GIF, WEBP (max 5MB)</span>
+        {error && <span className="text-xs text-destructive" data-testid="text-upload-error">{error}</span>}
+        {preview && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-destructive text-xs w-fit"
+            onClick={handleRemove}
+            data-testid="button-remove-image"
+          >
+            <X className="h-3 w-3 mr-1" /> Remove
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function Inventory() {
   const [search, setSearch] = useState("");
@@ -67,6 +161,7 @@ export default function Inventory() {
         <Table>
           <TableHeader className="bg-muted/50">
             <TableRow>
+              <TableHead className="w-12"></TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Product Name</TableHead>
               <TableHead>Brand</TableHead>
@@ -80,7 +175,7 @@ export default function Inventory() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center">
+                <TableCell colSpan={9} className="h-32 text-center">
                   <div className="flex justify-center items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     Loading products...
@@ -89,13 +184,27 @@ export default function Inventory() {
               </TableRow>
             ) : products?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground">
                   No products found. Add your first item.
                 </TableCell>
               </TableRow>
             ) : (
               products?.map((product: any) => (
                 <TableRow key={product.id} className="hover:bg-muted/30">
+                  <TableCell className="w-12 p-1">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-10 h-10 rounded-md object-cover border"
+                        data-testid={`img-product-${product.id}`}
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-md bg-muted/50 flex items-center justify-center">
+                        <ImagePlus className="h-4 w-4 text-muted-foreground/30" />
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="font-mono text-xs">{product.sku}</TableCell>
                   <TableCell>
                     <div className="font-medium">{product.name}</div>
@@ -168,6 +277,20 @@ export default function Inventory() {
 function ProductFormFields({ form }: { form: any }) {
   return (
     <>
+      <FormField
+        control={form.control}
+        name="imageUrl"
+        render={({ field }: any) => (
+          <FormItem>
+            <FormLabel>Product Image</FormLabel>
+            <FormControl>
+              <ImageUpload value={field.value} onChange={field.onChange} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       <div className="grid grid-cols-2 gap-4">
         <FormField
           control={form.control}
@@ -292,6 +415,7 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       reorderPoint: 5,
       costPrice: 0,
       sellingPrice: 0,
+      imageUrl: null,
       oemNumbers: [],
       compatibility: []
     }
@@ -360,6 +484,7 @@ function EditProductDialog({ product, open, onOpenChange }: { product: any; open
       reorderPoint: product.reorderPoint ?? 5,
       costPrice: Number(product.costPrice) || 0,
       sellingPrice: Number(product.sellingPrice) || 0,
+      imageUrl: product.imageUrl || null,
       oemNumbers: product.oemNumbers?.map((o: any) => o.oemNumber) || [],
       compatibility: product.compatibility || [],
     }
