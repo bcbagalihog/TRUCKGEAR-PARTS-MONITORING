@@ -1,20 +1,18 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
-import { useProducts, useCreateProduct } from "@/hooks/use-products";
+import { useProducts, useCreateProduct, useUpdateProduct } from "@/hooks/use-products";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { api } from "@shared/routes";
-import { Search, Plus, Loader2, PackageOpen, AlertCircle } from "lucide-react";
+import { Search, Plus, Loader2, Pencil } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
-// Create Schema specifically for the form (since manifest input is complex)
 const productFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   sku: z.string().min(1, "SKU is required"),
@@ -41,6 +39,7 @@ export default function Inventory() {
   const [search, setSearch] = useState("");
   const { data: products, isLoading } = useProducts(search);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editProduct, setEditProduct] = useState<any>(null);
 
   return (
     <Layout>
@@ -74,12 +73,13 @@ export default function Inventory() {
               <TableHead className="text-right">Price</TableHead>
               <TableHead>Location</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center">
+                <TableCell colSpan={8} className="h-32 text-center">
                   <div className="flex justify-center items-center gap-2 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin" />
                     Loading products...
@@ -88,7 +88,7 @@ export default function Inventory() {
               </TableRow>
             ) : products?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                   No products found. Add your first item.
                 </TableCell>
               </TableRow>
@@ -117,13 +117,142 @@ export default function Inventory() {
                       <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-green-50 text-green-700 border-green-200">In Stock</Badge>
                     )}
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      data-testid={`button-edit-product-${product.id}`}
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setEditProduct(product)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}
           </TableBody>
         </Table>
       </div>
+
+      {editProduct && (
+        <EditProductDialog
+          product={editProduct}
+          open={!!editProduct}
+          onOpenChange={(open) => { if (!open) setEditProduct(null); }}
+        />
+      )}
     </Layout>
+  );
+}
+
+function ProductFormFields({ form }: { form: any }) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <FormField
+          control={form.control}
+          name="name"
+          render={({ field }: any) => (
+            <FormItem className="col-span-2">
+              <FormLabel>Product Name</FormLabel>
+              <FormControl><Input data-testid="input-product-name" placeholder="e.g. Brake Pad Set" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="sku"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>SKU</FormLabel>
+              <FormControl><Input data-testid="input-product-sku" placeholder="BP-1234" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="category"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Category</FormLabel>
+              <FormControl><Input data-testid="input-product-category" placeholder="Brakes" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="brand"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Brand</FormLabel>
+              <FormControl><Input data-testid="input-product-brand" placeholder="Bosch" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="location"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Location</FormLabel>
+              <FormControl><Input data-testid="input-product-location" placeholder="Shelf A-12" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <div className="grid grid-cols-4 gap-4">
+        <FormField
+          control={form.control}
+          name="costPrice"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Cost (&#8369;)</FormLabel>
+              <FormControl><Input data-testid="input-product-cost" type="number" step="0.01" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="sellingPrice"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Price (&#8369;)</FormLabel>
+              <FormControl><Input data-testid="input-product-price" type="number" step="0.01" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="stockQuantity"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Stock Qty</FormLabel>
+              <FormControl><Input data-testid="input-product-stock" type="number" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="reorderPoint"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Reorder At</FormLabel>
+              <FormControl><Input data-testid="input-product-reorder" type="number" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+    </>
   );
 }
 
@@ -134,6 +263,11 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
+      name: "",
+      sku: "",
+      category: "",
+      brand: "",
+      location: "",
       stockQuantity: 0,
       reorderPoint: 5,
       costPrice: 0,
@@ -143,10 +277,6 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
     }
   });
 
-  // Dynamic fields for OEM Numbers
-  // Note: Simple implementation for now, in a real app would use useFieldArray
-  // but for brevity in this complex generation, we'll keep it simple or implement if space allows.
-  
   const onSubmit = (values: ProductFormValues) => {
     const payload = {
       ...values,
@@ -168,7 +298,7 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button className="gap-2 shadow-lg shadow-primary/20">
+        <Button data-testid="button-add-product" className="gap-2 shadow-lg shadow-primary/20">
           <Plus className="h-4 w-4" /> Add Product
         </Button>
       </DialogTrigger>
@@ -178,116 +308,75 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem className="col-span-2">
-                    <FormLabel>Product Name</FormLabel>
-                    <FormControl><Input placeholder="e.g. Brake Pad Set" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="sku"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SKU</FormLabel>
-                    <FormControl><Input placeholder="BP-1234" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <FormControl><Input placeholder="Brakes" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="brand"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Brand</FormLabel>
-                    <FormControl><Input placeholder="Bosch" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-               <FormField
-                control={form.control}
-                name="location"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Location</FormLabel>
-                    <FormControl><Input placeholder="Shelf A-12" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-4 gap-4">
-              <FormField
-                control={form.control}
-                name="costPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Cost (&#8369;)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="sellingPrice"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Price (&#8369;)</FormLabel>
-                    <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="stockQuantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Initial Stock</FormLabel>
-                    <FormControl><Input type="number" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="reorderPoint"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reorder At</FormLabel>
-                    <FormControl><Input type="number" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            
+            <ProductFormFields form={form} />
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit" disabled={createProduct.isPending}>
+              <Button data-testid="button-create-product" type="submit" disabled={createProduct.isPending}>
                 {createProduct.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Create Product
+              </Button>
+            </div>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditProductDialog({ product, open, onOpenChange }: { product: any; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { toast } = useToast();
+  const updateProduct = useUpdateProduct();
+
+  const form = useForm<ProductFormValues>({
+    resolver: zodResolver(productFormSchema),
+    defaultValues: {
+      name: product.name || "",
+      sku: product.sku || "",
+      category: product.category || "",
+      brand: product.brand || "",
+      description: product.description || "",
+      location: product.location || "",
+      stockQuantity: product.stockQuantity ?? 0,
+      reorderPoint: product.reorderPoint ?? 5,
+      costPrice: Number(product.costPrice) || 0,
+      sellingPrice: Number(product.sellingPrice) || 0,
+      oemNumbers: product.oemNumbers?.map((o: any) => o.oemNumber) || [],
+      compatibility: product.compatibility || [],
+    }
+  });
+
+  const onSubmit = (values: ProductFormValues) => {
+    const payload = {
+      id: product.id,
+      ...values,
+      costPrice: String(values.costPrice),
+      sellingPrice: String(values.sellingPrice),
+    };
+    updateProduct.mutate(payload as any, {
+      onSuccess: () => {
+        toast({ title: "Success", description: "Product updated successfully" });
+        onOpenChange(false);
+      },
+      onError: (err) => {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Product - {product.sku}</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
+            <ProductFormFields form={form} />
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button data-testid="button-save-product" type="submit" disabled={updateProduct.isPending}>
+                {updateProduct.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
               </Button>
             </div>
           </form>
