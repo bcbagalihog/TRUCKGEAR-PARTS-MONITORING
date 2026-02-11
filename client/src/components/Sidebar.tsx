@@ -33,7 +33,7 @@ export function Sidebar() {
     return name?.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || 'U';
   };
 
-  const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'User';
+  const displayName = user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username : 'User';
 
   return (
     <div className="h-screen w-64 bg-card border-r border-border flex flex-col fixed left-0 top-0 z-50">
@@ -69,7 +69,7 @@ export function Sidebar() {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{displayName}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+            <p className="text-xs text-muted-foreground truncate">@{user?.username}</p>
           </div>
         </div>
         <button 

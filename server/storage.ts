@@ -50,9 +50,9 @@ export interface IStorage extends IAuthStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // ... Auth Storage Mixin
   getUser = authStorage.getUser.bind(authStorage);
-  upsertUser = authStorage.upsertUser.bind(authStorage);
+  getUserByUsername = authStorage.getUserByUsername.bind(authStorage);
+  createUser = authStorage.createUser.bind(authStorage);
 
   // Products
   async getProducts(search?: string): Promise<ProductWithDetails[]> {

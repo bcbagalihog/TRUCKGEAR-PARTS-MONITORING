@@ -7,7 +7,7 @@ A professional inventory management system for an auto supply business. Includes
 - **Frontend**: React + Vite + Tailwind CSS + shadcn/ui components
 - **Backend**: Express.js (Node.js)
 - **Database**: PostgreSQL via Drizzle ORM
-- **Auth**: Replit Auth (OpenID Connect)
+- **Auth**: Custom username/password auth with bcrypt + express-session
 
 ## Key Features
 - **Inventory**: Product catalog with SKU, OEM cross-references, car model compatibility, stock tracking
@@ -17,7 +17,7 @@ A professional inventory management system for an auto supply business. Includes
 - **Dashboard**: Low stock alerts, pending orders, recent sales activity
 - **Reports**: Activity reports with bar/line charts for sales & purchases (7-day, 30-day, monthly, quarterly, yearly)
 - **Currency**: Philippine Pesos (₱)
-- **Auth**: Replit Auth with session management
+- **Auth**: Custom username/password registration and login with bcrypt password hashing and session-based authentication
 
 ## Project Structure
 ```
@@ -30,7 +30,7 @@ server/
   db.ts              - Database connection
   storage.ts         - DatabaseStorage class (all CRUD)
   routes.ts          - Express API route handlers + seed data
-  replit_integrations/auth/ - Replit Auth module
+  replit_integrations/auth/ - Custom auth module (register/login/logout)
 client/src/
   App.tsx            - Router + layout with sidebar
   pages/             - Dashboard, Inventory, Sales, Purchases, Customers, Vendors, Reports, Login
@@ -54,10 +54,10 @@ client/src/
 - users, sessions (auth)
 
 ## API Endpoints
-- `/api/products` (GET, POST), `/api/products/:id` (GET, PUT)
+- `/api/products` (GET, POST), `/api/products/:id` (GET, PUT, DELETE)
 - `/api/customers` (GET, POST), `/api/vendors` (GET, POST)
 - `/api/sales-orders` (GET, POST), `/api/sales-orders/:id` (GET), `/api/sales-orders/:id/status` (PATCH)
 - `/api/purchase-orders` (GET, POST), `/api/purchase-orders/:id` (GET), `/api/purchase-orders/:id/status` (PATCH)
 - `/api/stats/dashboard` (GET)
 - `/api/reports/activity?period=` (GET) - periods: daily, 7day, 30day, monthly, quarterly, yearly
-- `/api/auth/user`, `/api/login`, `/api/logout`
+- `/api/auth/register` (POST), `/api/auth/login` (POST), `/api/auth/user` (GET), `/api/auth/logout` (POST)
