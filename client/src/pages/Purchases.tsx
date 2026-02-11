@@ -83,7 +83,7 @@ export default function Purchases() {
                   <TableCell>{order.vendor?.name || 'Unknown'}</TableCell>
                   <TableCell>{new Date(order.orderDate).toLocaleDateString()}</TableCell>
                   <TableCell><StatusBadge status={order.status} /></TableCell>
-                  <TableCell className="text-right font-bold">${Number(order.totalAmount).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-bold">&#8369;{Number(order.totalAmount).toFixed(2)}</TableCell>
                   <TableCell className="text-right">
                     <Select defaultValue={order.status} onValueChange={(val) => handleStatusChange(order.id, val)}>
                       <SelectTrigger data-testid={`select-po-status-${order.id}`} className="h-8 w-[110px] ml-auto">
@@ -325,7 +325,7 @@ function CreatePurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
             <div className="flex justify-end items-center gap-4 pt-4 border-t">
               <div className="text-right">
                 <span className="text-muted-foreground text-sm mr-2">Total:</span>
-                <span data-testid="text-po-total" className="text-xl font-bold">${total.toFixed(2)}</span>
+                <span data-testid="text-po-total" className="text-xl font-bold">&#8369;{total.toFixed(2)}</span>
               </div>
               <Button data-testid="button-create-po" type="submit" disabled={createOrder.isPending}>
                 {createOrder.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

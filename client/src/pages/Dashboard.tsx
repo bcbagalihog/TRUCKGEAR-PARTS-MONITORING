@@ -71,7 +71,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-sm">${Number(sale.totalAmount).toFixed(2)}</p>
+                      <p className="font-bold text-sm">&#8369;{Number(sale.totalAmount).toFixed(2)}</p>
                       <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{sale.status}</span>
                     </div>
                   </div>

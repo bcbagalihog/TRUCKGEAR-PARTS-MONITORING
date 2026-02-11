@@ -107,7 +107,7 @@ export default function Inventory() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
-                    ${Number(product.sellingPrice).toFixed(2)}
+                    &#8369;{Number(product.sellingPrice).toFixed(2)}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{product.location || '-'}</TableCell>
                   <TableCell>
@@ -237,7 +237,7 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 name="costPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Cost ($)</FormLabel>
+                    <FormLabel>Cost (&#8369;)</FormLabel>
                     <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -248,7 +248,7 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
                 name="sellingPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Price ($)</FormLabel>
+                    <FormLabel>Price (&#8369;)</FormLabel>
                     <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
