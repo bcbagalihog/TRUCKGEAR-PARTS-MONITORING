@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import logoImg from "@assets/Ben_Anthony_Bagalihog_A_simple,_minimalist_logo_featuring_a_bl_1770796859768.png";
 import { 
   LayoutDashboard, 
   Package, 
@@ -38,11 +39,9 @@ export function Sidebar() {
     <div className="h-screen w-64 bg-card border-r border-border flex flex-col fixed left-0 top-0 z-50">
       <div className="p-6">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center">
-            <Settings className="h-5 w-5 text-primary-foreground animate-spin-slow" />
-          </div>
+          <img src={logoImg} alt="TruckGear Logo" className="h-8 w-8 rounded-md object-cover" />
           <h1 className="font-display text-2xl font-bold tracking-tight text-primary">
-            TRUCKGEAR<span className="text-accent">.IO</span>
+            TRUCKGEAR<span className="text-yellow-400">.IO</span>
           </h1>
         </div>
       </div>
