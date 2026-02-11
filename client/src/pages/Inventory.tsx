@@ -148,7 +148,12 @@ function CreateProductDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   // but for brevity in this complex generation, we'll keep it simple or implement if space allows.
   
   const onSubmit = (values: ProductFormValues) => {
-    createProduct.mutate(values as any, {
+    const payload = {
+      ...values,
+      costPrice: String(values.costPrice),
+      sellingPrice: String(values.sellingPrice),
+    };
+    createProduct.mutate(payload as any, {
       onSuccess: () => {
         toast({ title: "Success", description: "Product created successfully" });
         onOpenChange(false);
