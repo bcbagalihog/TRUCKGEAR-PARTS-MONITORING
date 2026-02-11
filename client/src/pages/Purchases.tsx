@@ -18,8 +18,17 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { z } from "zod";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+
+type PaperSize = "4x6" | "a5" | "a4";
+
+const PAPER_CONFIGS: Record<PaperSize, { label: string; format: [number, number] | string; orientation: "portrait" | "landscape" }> = {
+  "4x6": { label: '4" x 6"', format: [101.6, 152.4], orientation: "portrait" },
+  "a5": { label: "A5", format: "a5", orientation: "portrait" },
+  "a4": { label: "A4", format: "a4", orientation: "portrait" },
+};
 
 const purchaseItemSchema = z.object({
   isCustom: z.boolean().default(false),
@@ -41,121 +50,190 @@ function formatPONumber(id: number): string {
   return `PO-${String(id).padStart(5, '0')}`;
 }
 
-function generatePurchaseOrderPDF(order: any) {
-  const doc = new jsPDF();
+function generatePurchaseOrderPDF(order: any, paperSize: PaperSize = "a4") {
+  const config = PAPER_CONFIGS[paperSize];
+  const doc = new jsPDF({ orientation: config.orientation, format: config.format, unit: "mm" });
   const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
 
-  doc.setFontSize(18);
+  const isSmall = paperSize === "4x6";
+  const isMedium = paperSize === "a5";
+
+  const margin = isSmall ? 4 : isMedium ? 8 : 15;
+  const titleSize = isSmall ? 10 : isMedium ? 13 : 18;
+  const headingSize = isSmall ? 7 : isMedium ? 8 : 10;
+  const bodySize = isSmall ? 6 : isMedium ? 7 : 9;
+  const lineHeight = isSmall ? 3.2 : isMedium ? 4 : 5;
+  const tableFontSize = isSmall ? 5.5 : isMedium ? 7 : 9;
+  const tablePadding = isSmall ? 1.5 : isMedium ? 2.5 : 4;
+  const totalSize = isSmall ? 7 : isMedium ? 9 : 11;
+
+  let y = margin + (isSmall ? 4 : 6);
+
+  doc.setFontSize(titleSize);
   doc.setFont("helvetica", "bold");
-  doc.text("Purchase Order", pageWidth / 2, 20, { align: "center" });
+  doc.text("Purchase Order", pageWidth / 2, y, { align: "center" });
+  y += isSmall ? 4 : 6;
 
-  doc.setFontSize(10);
+  doc.setFontSize(bodySize);
   doc.setFont("helvetica", "normal");
-  doc.text(`# ${formatPONumber(order.id)}`, pageWidth - 15, 28, { align: "right" });
+  doc.text(`# ${formatPONumber(order.id)}`, pageWidth - margin, y, { align: "right" });
+  y += lineHeight + 2;
 
-  doc.setFontSize(10);
+  doc.setFontSize(headingSize);
   doc.setFont("helvetica", "bold");
-  doc.text("TruckGear Truck Parts Store", 15, 40);
-  doc.setFont("helvetica", "normal");
+  doc.text("TruckGear Truck Parts Store", margin, y);
+  y += lineHeight + 2;
 
-  doc.setFontSize(9);
+  doc.setFontSize(bodySize);
   doc.setFont("helvetica", "bold");
-  doc.text("Vendor Address", 15, 52);
+  doc.text("Vendor:", margin, y);
   doc.setFont("helvetica", "normal");
   const vendorName = order.vendor?.name || "Unknown";
-  doc.text(vendorName, 15, 58);
-  if (order.vendor?.address) {
+  y += lineHeight;
+  doc.text(vendorName, margin, y);
+  if (order.vendor?.address && !isSmall) {
     const addressLines = order.vendor.address.split('\n');
-    let yPos = 63;
     for (const line of addressLines) {
-      doc.text(line, 15, yPos);
-      yPos += 5;
+      y += lineHeight;
+      doc.text(line, margin, y);
     }
   }
   if (order.vendor?.phone) {
-    doc.text(order.vendor.phone, 15, 83);
+    y += lineHeight;
+    doc.text(order.vendor.phone, margin, y);
   }
-  if (order.vendor?.email) {
-    doc.text(order.vendor.email, 15, 88);
+  if (order.vendor?.email && !isSmall) {
+    y += lineHeight;
+    doc.text(order.vendor.email, margin, y);
   }
 
   const orderDate = new Date(order.orderDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  doc.setFontSize(9);
+  const infoX = pageWidth - margin;
+  const labelX = isSmall ? pageWidth - 40 : isMedium ? pageWidth - 55 : pageWidth - 70;
+  const infoStartY = isSmall ? margin + 12 : isMedium ? margin + 18 : margin + 38;
+
+  doc.setFontSize(bodySize);
   doc.setFont("helvetica", "bold");
-  doc.text("Date :", pageWidth - 70, 58);
+  doc.text("Date:", labelX, infoStartY);
   doc.setFont("helvetica", "normal");
-  doc.text(orderDate, pageWidth - 15, 58, { align: "right" });
+  doc.text(orderDate, infoX, infoStartY, { align: "right" });
 
   doc.setFont("helvetica", "bold");
-  doc.text("Terms :", pageWidth - 70, 65);
+  doc.text("Terms:", labelX, infoStartY + lineHeight);
   doc.setFont("helvetica", "normal");
-  doc.text("Net 120", pageWidth - 15, 65, { align: "right" });
+  doc.text("Net 120", infoX, infoStartY + lineHeight, { align: "right" });
 
-  doc.setFont("helvetica", "bold");
-  doc.text("Delivery Date :", pageWidth - 70, 72);
-  doc.setFont("helvetica", "normal");
-  doc.text(orderDate, pageWidth - 15, 72, { align: "right" });
+  if (!isSmall) {
+    doc.setFont("helvetica", "bold");
+    doc.text("Delivery:", labelX, infoStartY + lineHeight * 2);
+    doc.setFont("helvetica", "normal");
+    doc.text(orderDate, infoX, infoStartY + lineHeight * 2, { align: "right" });
+  }
+
+  y += lineHeight + 3;
 
   const tableData = order.items.map((item: any, idx: number) => {
     const itemName = item.productId
       ? (item.product?.sku ? `${item.product.sku} - ${item.product.name}` : item.product?.name || `Product #${item.productId}`)
       : (item.description || "Custom Item");
-    const qty = Number(item.quantity).toFixed(2);
+    const truncatedName = isSmall && itemName.length > 20 ? itemName.substring(0, 18) + ".." : isMedium && itemName.length > 30 ? itemName.substring(0, 28) + ".." : itemName;
+    const qty = Number(item.quantity).toFixed(isSmall ? 0 : 2);
     const rate = Number(item.unitCost).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const amount = (Number(item.quantity) * Number(item.unitCost)).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return [String(idx + 1), itemName, qty, rate, amount];
+    return [String(idx + 1), truncatedName, qty, rate, amount];
   });
 
+  const numColW = isSmall ? 6 : isMedium ? 10 : 15;
+  const qtyColW = isSmall ? 10 : isMedium ? 16 : 25;
+  const rateColW = isSmall ? 16 : isMedium ? 22 : 35;
+  const amtColW = isSmall ? 18 : isMedium ? 24 : 35;
+
   autoTable(doc, {
-    startY: 98,
+    startY: y,
     head: [["#", "Item & Description", "Qty", "Rate", "Amount"]],
     body: tableData,
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [245, 245, 245], textColor: [30, 30, 30], fontStyle: "bold", lineWidth: 0.5, lineColor: [200, 200, 200] },
+    margin: { left: margin, right: margin },
+    styles: { fontSize: tableFontSize, cellPadding: tablePadding },
+    headStyles: { fillColor: [245, 245, 245], textColor: [30, 30, 30], fontStyle: "bold", lineWidth: 0.3, lineColor: [200, 200, 200] },
     columnStyles: {
-      0: { cellWidth: 15, halign: "center" },
+      0: { cellWidth: numColW, halign: "center" },
       1: { cellWidth: "auto" },
-      2: { cellWidth: 25, halign: "right" },
-      3: { cellWidth: 35, halign: "right" },
-      4: { cellWidth: 35, halign: "right" },
+      2: { cellWidth: qtyColW, halign: "right" },
+      3: { cellWidth: rateColW, halign: "right" },
+      4: { cellWidth: amtColW, halign: "right" },
     },
     theme: "plain",
   });
 
-  const finalY = (doc as any).lastAutoTable?.finalY || 160;
+  const finalY = (doc as any).lastAutoTable?.finalY || y + 20;
 
   const subtotal = Number(order.totalAmount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const total = Number(order.totalAmount).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  doc.setFontSize(9);
+  const totalLabelX = isSmall ? pageWidth - 38 : isMedium ? pageWidth - 50 : pageWidth - 70;
+  const gapAfterTable = isSmall ? 4 : isMedium ? 8 : 15;
+
+  doc.setFontSize(bodySize);
   doc.setFont("helvetica", "bold");
-  doc.text("Sub Total", pageWidth - 70, finalY + 15);
+  doc.text("Sub Total", totalLabelX, finalY + gapAfterTable);
   doc.setFont("helvetica", "normal");
-  doc.text(subtotal, pageWidth - 15, finalY + 15, { align: "right" });
+  doc.text(subtotal, pageWidth - margin, finalY + gapAfterTable, { align: "right" });
 
   doc.setDrawColor(200, 200, 200);
-  doc.line(pageWidth - 85, finalY + 20, pageWidth - 15, finalY + 20);
+  doc.line(totalLabelX - 2, finalY + gapAfterTable + 2, pageWidth - margin, finalY + gapAfterTable + 2);
 
-  doc.setFontSize(11);
+  const totalGap = isSmall ? 7 : isMedium ? 12 : 18;
+  doc.setFontSize(totalSize);
   doc.setFont("helvetica", "bold");
-  doc.text("Total", pageWidth - 70, finalY + 30);
-  doc.text(`PHP${total}`, pageWidth - 15, finalY + 30, { align: "right" });
+  doc.text("Total", totalLabelX, finalY + gapAfterTable + totalGap - 3);
+  doc.text(`PHP${total}`, pageWidth - margin, finalY + gapAfterTable + totalGap - 3, { align: "right" });
 
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "bold");
-  doc.text("Authorized Signature", 15, finalY + 50);
-  doc.setDrawColor(100, 100, 100);
-  doc.line(15, finalY + 60, 80, finalY + 60);
+  if (!isSmall) {
+    const sigY = Math.min(finalY + gapAfterTable + totalGap + 15, pageHeight - 20);
+    doc.setFontSize(bodySize);
+    doc.setFont("helvetica", "bold");
+    doc.text("Authorized Signature", margin, sigY);
+    doc.setDrawColor(100, 100, 100);
+    doc.line(margin, sigY + 8, margin + 50, sigY + 8);
+  }
 
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
+    doc.setFontSize(isSmall ? 5 : 8);
     doc.setFont("helvetica", "normal");
-    doc.text(String(i), pageWidth - 15, doc.internal.pageSize.getHeight() - 10, { align: "right" });
+    doc.text(String(i), pageWidth - margin, pageHeight - (isSmall ? 3 : 10), { align: "right" });
   }
 
   return doc;
+}
+
+function PaperSizeMenu({ onSelect, triggerButton }: { onSelect: (size: PaperSize) => void; triggerButton: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {triggerButton}
+      </PopoverTrigger>
+      <PopoverContent className="w-36 p-1" align="end">
+        <div className="flex flex-col">
+          {(Object.entries(PAPER_CONFIGS) as [PaperSize, typeof PAPER_CONFIGS[PaperSize]][]).map(([key, cfg]) => (
+            <Button
+              key={key}
+              variant="ghost"
+              size="sm"
+              className="justify-start text-xs"
+              data-testid={`button-paper-${key}`}
+              onClick={() => { onSelect(key); setOpen(false); }}
+            >
+              {cfg.label}
+            </Button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 export default function Purchases() {
@@ -187,8 +265,8 @@ export default function Purchases() {
     });
   };
 
-  const handlePrint = (order: any) => {
-    const doc = generatePurchaseOrderPDF(order);
+  const handlePrint = (order: any, paperSize: PaperSize) => {
+    const doc = generatePurchaseOrderPDF(order, paperSize);
     const pdfBlob = doc.output("blob");
     const url = URL.createObjectURL(pdfBlob);
     const printWindow = window.open(url);
@@ -199,8 +277,8 @@ export default function Purchases() {
     }
   };
 
-  const handleDownloadPDF = (order: any) => {
-    const doc = generatePurchaseOrderPDF(order);
+  const handleDownloadPDF = (order: any, paperSize: PaperSize) => {
+    const doc = generatePurchaseOrderPDF(order, paperSize);
     doc.save(`${formatPONumber(order.id)}.pdf`);
   };
 
@@ -253,24 +331,32 @@ export default function Purchases() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button
-                        data-testid={`button-print-po-${order.id}`}
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handlePrint(order)}
-                        title="Print Order"
-                      >
-                        <Printer className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        data-testid={`button-pdf-po-${order.id}`}
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDownloadPDF(order)}
-                        title="Download PDF"
-                      >
-                        <Download className="h-4 w-4" />
-                      </Button>
+                      <PaperSizeMenu
+                        onSelect={(size) => handlePrint(order, size)}
+                        triggerButton={
+                          <Button
+                            data-testid={`button-print-po-${order.id}`}
+                            size="icon"
+                            variant="ghost"
+                            title="Print Order"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+                      <PaperSizeMenu
+                        onSelect={(size) => handleDownloadPDF(order, size)}
+                        triggerButton={
+                          <Button
+                            data-testid={`button-pdf-po-${order.id}`}
+                            size="icon"
+                            variant="ghost"
+                            title="Download PDF"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
                       <Button
                         data-testid={`button-delete-po-${order.id}`}
                         size="icon"
