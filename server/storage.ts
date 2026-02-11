@@ -213,17 +213,15 @@ export class DatabaseStorage implements IStorage {
       
       if (!currentOrder) throw new Error("Order not found");
 
-      // Logic: If moving to 'invoiced', deduct stock
+      // Logic: If moving to 'invoiced', deduct stock (only for inventory items)
       if (status === 'invoiced' && currentOrder.status !== 'invoiced') {
         for (const item of currentOrder.items) {
-          // Decrement stock
+          if (!item.productId) continue; // Skip custom/non-inventory items
           await tx.execute(sql`
             UPDATE products 
             SET stock_quantity = stock_quantity - ${item.quantity} 
             WHERE id = ${item.productId}
           `);
-
-          // Log transaction
           await tx.insert(inventoryTransactions).values({
             productId: item.productId,
             type: 'OUT',
@@ -303,17 +301,15 @@ export class DatabaseStorage implements IStorage {
       
       if (!currentOrder) throw new Error("Order not found");
 
-      // Logic: If moving to 'received', add stock
+      // Logic: If moving to 'received', add stock (only for inventory items)
       if (status === 'received' && currentOrder.status !== 'received') {
         for (const item of currentOrder.items) {
-          // Increment stock
+          if (!item.productId) continue; // Skip custom/non-inventory items
           await tx.execute(sql`
             UPDATE products 
             SET stock_quantity = stock_quantity + ${item.quantity} 
             WHERE id = ${item.productId}
           `);
-
-          // Log transaction
           await tx.insert(inventoryTransactions).values({
             productId: item.productId,
             type: 'IN',

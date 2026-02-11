@@ -33,7 +33,8 @@ const productWithRelationsSchema = insertProductSchema.extend({
 
 const salesOrderWithItemsSchema = insertSalesOrderSchema.extend({
   items: z.array(z.object({
-    productId: z.number(),
+    productId: z.number().nullable().optional(),
+    description: z.string().nullable().optional(),
     quantity: z.number(),
     unitPrice: z.number().or(z.string().transform(Number)),
   })),
@@ -41,7 +42,8 @@ const salesOrderWithItemsSchema = insertSalesOrderSchema.extend({
 
 const purchaseOrderWithItemsSchema = insertPurchaseOrderSchema.extend({
   items: z.array(z.object({
-    productId: z.number(),
+    productId: z.number().nullable().optional(),
+    description: z.string().nullable().optional(),
     quantity: z.number(),
     unitCost: z.number().or(z.string().transform(Number)),
   })),

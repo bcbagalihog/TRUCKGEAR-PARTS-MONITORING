@@ -68,7 +68,8 @@ export const salesOrders = pgTable("sales_orders", {
 export const salesOrderItems = pgTable("sales_order_items", {
   id: serial("id").primaryKey(),
   salesOrderId: integer("sales_order_id").notNull().references(() => salesOrders.id),
-  productId: integer("product_id").notNull().references(() => products.id),
+  productId: integer("product_id").references(() => products.id),
+  description: text("description"),
   quantity: integer("quantity").notNull(),
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
 });
@@ -85,7 +86,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
 export const purchaseOrderItems = pgTable("purchase_order_items", {
   id: serial("id").primaryKey(),
   purchaseOrderId: integer("purchase_order_id").notNull().references(() => purchaseOrders.id),
-  productId: integer("product_id").notNull().references(() => products.id),
+  productId: integer("product_id").references(() => products.id),
+  description: text("description"),
   quantity: integer("quantity").notNull(),
   unitCost: decimal("unit_cost", { precision: 10, scale: 2 }).notNull(),
 });
