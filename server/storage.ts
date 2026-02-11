@@ -43,6 +43,9 @@ export interface IStorage extends IAuthStorage {
 
   // Dashboard Stats
   getDashboardStats(): Promise<any>;
+
+  // Activity Report
+  getActivityReport(period: string): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -353,6 +356,90 @@ export class DatabaseStorage implements IStorage {
       pendingOrders: Number(ordersCount.count),
       lowStockCount: Number(lowStock.count),
       recentSales
+    };
+  }
+
+  async getActivityReport(period: string): Promise<any> {
+    let intervalDays: number;
+
+    const formatMap: Record<string, { fmt: string; days: number }> = {
+      'daily': { fmt: 'YYYY-MM-DD', days: 30 },
+      '7day': { fmt: 'YYYY-MM-DD', days: 7 },
+      '30day': { fmt: 'YYYY-MM-DD', days: 30 },
+      'monthly': { fmt: 'YYYY-MM', days: 365 },
+      'quarterly': { fmt: 'YYYY-"Q"Q', days: 730 },
+      'yearly': { fmt: 'YYYY', days: 1825 },
+    };
+    const config = formatMap[period] || formatMap['30day'];
+    intervalDays = config.days;
+    const dateFormat = config.fmt;
+
+    const buildQuery = (table: string) => {
+      if (dateFormat === 'YYYY-MM-DD') {
+        return `
+          SELECT 
+            to_char(order_date, 'YYYY-MM-DD') as period,
+            COUNT(*)::int as order_count,
+            COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount
+          FROM ${table}
+          WHERE order_date >= NOW() - INTERVAL '${intervalDays} days'
+          GROUP BY to_char(order_date, 'YYYY-MM-DD')
+          ORDER BY period ASC
+        `;
+      } else if (dateFormat === 'YYYY-MM') {
+        return `
+          SELECT 
+            to_char(order_date, 'YYYY-MM') as period,
+            COUNT(*)::int as order_count,
+            COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount
+          FROM ${table}
+          WHERE order_date >= NOW() - INTERVAL '${intervalDays} days'
+          GROUP BY to_char(order_date, 'YYYY-MM')
+          ORDER BY period ASC
+        `;
+      } else if (dateFormat === 'YYYY-"Q"Q') {
+        return `
+          SELECT 
+            to_char(order_date, 'YYYY-"Q"Q') as period,
+            COUNT(*)::int as order_count,
+            COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount
+          FROM ${table}
+          WHERE order_date >= NOW() - INTERVAL '${intervalDays} days'
+          GROUP BY to_char(order_date, 'YYYY-"Q"Q')
+          ORDER BY period ASC
+        `;
+      } else {
+        return `
+          SELECT 
+            to_char(order_date, 'YYYY') as period,
+            COUNT(*)::int as order_count,
+            COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount
+          FROM ${table}
+          WHERE order_date >= NOW() - INTERVAL '${intervalDays} days'
+          GROUP BY to_char(order_date, 'YYYY')
+          ORDER BY period ASC
+        `;
+      }
+    };
+
+    const buildSummaryQuery = (table: string, amountAlias: string) => `
+      SELECT 
+        COUNT(*)::int as total_orders,
+        COALESCE(SUM(CAST(total_amount AS numeric)), 0) as ${amountAlias}
+      FROM ${table}
+      WHERE order_date >= NOW() - INTERVAL '${intervalDays} days'
+    `;
+
+    const salesData = await db.execute(sql.raw(buildQuery('sales_orders')));
+    const purchaseData = await db.execute(sql.raw(buildQuery('purchase_orders')));
+    const salesSummary = await db.execute(sql.raw(buildSummaryQuery('sales_orders', 'total_revenue')));
+    const purchaseSummary = await db.execute(sql.raw(buildSummaryQuery('purchase_orders', 'total_cost')));
+
+    return {
+      sales: salesData.rows,
+      purchases: purchaseData.rows,
+      salesSummary: salesSummary.rows[0],
+      purchaseSummary: purchaseSummary.rows[0],
     };
   }
 }

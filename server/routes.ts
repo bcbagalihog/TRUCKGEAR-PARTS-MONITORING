@@ -126,6 +126,13 @@ export async function registerRoutes(
     res.json(stats);
   });
 
+  // --- Activity Report ---
+  app.get("/api/reports/activity", async (req, res) => {
+    const period = (req.query.period as string) || 'daily';
+    const report = await storage.getActivityReport(period);
+    res.json(report);
+  });
+
   // Seed data (simple check)
   if (process.env.NODE_ENV !== 'production') {
     const products = await storage.getProducts();

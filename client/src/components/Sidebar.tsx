@@ -7,7 +7,8 @@ import {
   Users, 
   Store, 
   LogOut,
-  Settings
+  Settings,
+  BarChart3
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,6 +25,7 @@ export function Sidebar() {
     { icon: Truck, label: "Purchases", href: "/purchases" },
     { icon: Users, label: "Customers", href: "/customers" },
     { icon: Store, label: "Vendors", href: "/vendors" },
+    { icon: BarChart3, label: "Reports", href: "/reports" },
   ];
 
   const getInitials = (name: string) => {
