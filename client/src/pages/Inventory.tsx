@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
-import { useProducts, useCreateProduct, useUpdateProduct } from "@/hooks/use-products";
+import { useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct } from "@/hooks/use-products";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Search, Plus, Loader2, Pencil } from "lucide-react";
+import { Search, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -40,6 +40,7 @@ export default function Inventory() {
   const { data: products, isLoading } = useProducts(search);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<any>(null);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
 
   return (
     <Layout>
@@ -118,14 +119,25 @@ export default function Inventory() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      data-testid={`button-edit-product-${product.id}`}
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setEditProduct(product)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        data-testid={`button-edit-product-${product.id}`}
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setEditProduct(product)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        data-testid={`button-delete-product-${product.id}`}
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={() => setDeleteTarget(product)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -139,6 +151,14 @@ export default function Inventory() {
           product={editProduct}
           open={!!editProduct}
           onOpenChange={(open) => { if (!open) setEditProduct(null); }}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteProductDialog
+          product={deleteTarget}
+          open={!!deleteTarget}
+          onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
         />
       )}
     </Layout>
@@ -381,6 +401,46 @@ function EditProductDialog({ product, open, onOpenChange }: { product: any; open
             </div>
           </form>
         </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteProductDialog({ product, open, onOpenChange }: { product: any; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { toast } = useToast();
+  const deleteProduct = useDeleteProduct();
+
+  const handleDelete = () => {
+    deleteProduct.mutate(product.id, {
+      onSuccess: () => {
+        toast({ title: "Deleted", description: `"${product.name}" has been removed from inventory.` });
+        onOpenChange(false);
+      },
+      onError: (err) => {
+        toast({ title: "Cannot Delete", description: err.message, variant: "destructive" });
+      }
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete Product</DialogTitle>
+          <DialogDescription>This action cannot be undone.</DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <span className="font-semibold text-foreground">{product.name}</span> ({product.sku})?
+          </p>
+        </div>
+        <div className="flex justify-end gap-3">
+          <Button data-testid="button-cancel-delete" type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button data-testid="button-confirm-delete" variant="destructive" onClick={handleDelete} disabled={deleteProduct.isPending}>
+            {deleteProduct.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Delete
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

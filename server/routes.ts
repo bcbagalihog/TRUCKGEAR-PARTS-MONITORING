@@ -50,6 +50,21 @@ export async function registerRoutes(
     }
   });
 
+  app.delete(api.products.delete.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const product = await storage.getProduct(id);
+      if (!product) return res.status(404).json({ message: "Product not found" });
+      await storage.deleteProduct(id);
+      res.json({ message: "Product deleted" });
+    } catch (e: any) {
+      if (e.code === '23503') {
+        return res.status(400).json({ message: "Cannot delete product that is used in existing orders. Remove it from all orders first." });
+      }
+      throw e;
+    }
+  });
+
   // --- Customers ---
   app.get(api.customers.list.path, async (req, res) => {
     const customers = await storage.getCustomers();

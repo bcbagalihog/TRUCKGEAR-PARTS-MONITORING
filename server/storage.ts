@@ -19,6 +19,7 @@ export interface IStorage extends IAuthStorage {
   getProduct(id: number): Promise<ProductWithDetails | undefined>;
   createProduct(product: InsertProduct, oemNumbers?: string[], compatibility?: any[]): Promise<ProductWithDetails>;
   updateProduct(id: number, product: Partial<InsertProduct>, oemNumbers?: string[], compatibility?: any[]): Promise<ProductWithDetails>;
+  deleteProduct(id: number): Promise<void>;
   
   // Customers & Vendors
   getCustomers(): Promise<Customer[]>;
@@ -127,6 +128,15 @@ export class DatabaseStorage implements IStorage {
         where: eq(products.id, id),
         with: { oemNumbers: true, compatibility: true }
       })) as ProductWithDetails;
+    });
+  }
+
+  async deleteProduct(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(productOemNumbers).where(eq(productOemNumbers.productId, id));
+      await tx.delete(productCompatibility).where(eq(productCompatibility.productId, id));
+      await tx.delete(inventoryTransactions).where(eq(inventoryTransactions.productId, id));
+      await tx.delete(products).where(eq(products.id, id));
     });
   }
 
