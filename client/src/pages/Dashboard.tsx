@@ -1,6 +1,6 @@
 import { useDashboardStats } from "@/hooks/use-stats";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, Package, ShoppingCart, Clock } from "lucide-react";
+import { AlertTriangle, Package, ShoppingCart, Clock, Truck, Users } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";

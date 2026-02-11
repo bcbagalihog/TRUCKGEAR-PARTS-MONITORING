@@ -1,0 +1,58 @@
+# Auto Supply Inventory Management System
+
+## Overview
+A professional inventory management system for an auto supply business. Includes inventory tracking with OEM cross-referencing, sales orders, purchase orders, customer/vendor management, and dashboard reporting.
+
+## Architecture
+- **Frontend**: React + Vite + Tailwind CSS + shadcn/ui components
+- **Backend**: Express.js (Node.js)
+- **Database**: PostgreSQL via Drizzle ORM
+- **Auth**: Replit Auth (OpenID Connect)
+
+## Key Features
+- **Inventory**: Product catalog with SKU, OEM cross-references, car model compatibility, stock tracking
+- **Sales**: Sales orders with status tracking (Draft → Shipped → Invoiced). Invoicing decreases stock.
+- **Purchases**: Purchase orders with status tracking (Draft → Ordered → Received). Receiving increases stock.
+- **Dashboard**: Low stock alerts, pending orders, recent sales activity
+- **Auth**: Replit Auth with session management
+
+## Project Structure
+```
+shared/
+  schema.ts          - Drizzle tables, Zod schemas, TypeScript types
+  routes.ts          - API contract definitions
+  models/auth.ts     - Auth-related schemas (users, sessions)
+server/
+  index.ts           - Server entry point
+  db.ts              - Database connection
+  storage.ts         - DatabaseStorage class (all CRUD)
+  routes.ts          - Express API route handlers + seed data
+  replit_integrations/auth/ - Replit Auth module
+client/src/
+  App.tsx            - Router + layout with sidebar
+  pages/             - Dashboard, Inventory, Sales, Purchases, Customers, Vendors, Login
+  components/        - Layout, Sidebar, StatusBadge, ui/
+  hooks/             - use-auth, use-products, use-orders, use-parties, use-stats
+  lib/               - queryClient, utils, auth-utils
+```
+
+## Stock Logic
+- When a Purchase Order status → "received": stock increases for each line item
+- When a Sales Order status → "invoiced": stock decreases for each line item
+- All changes are logged in `inventory_transactions` table
+
+## Database Tables
+- products, product_oem_numbers, product_compatibility
+- customers, vendors
+- sales_orders, sales_order_items
+- purchase_orders, purchase_order_items
+- inventory_transactions
+- users, sessions (auth)
+
+## API Endpoints
+- `/api/products` (GET, POST), `/api/products/:id` (GET, PUT)
+- `/api/customers` (GET, POST), `/api/vendors` (GET, POST)
+- `/api/sales-orders` (GET, POST), `/api/sales-orders/:id` (GET), `/api/sales-orders/:id/status` (PATCH)
+- `/api/purchase-orders` (GET, POST), `/api/purchase-orders/:id` (GET), `/api/purchase-orders/:id/status` (PATCH)
+- `/api/stats/dashboard` (GET)
+- `/api/auth/user`, `/api/login`, `/api/logout`
