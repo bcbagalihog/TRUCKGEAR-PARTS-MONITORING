@@ -17,6 +17,7 @@ export interface IStorage extends IAuthStorage {
   // Products
   getProducts(search?: string): Promise<ProductWithDetails[]>;
   getProduct(id: number): Promise<ProductWithDetails | undefined>;
+  getProductBySku(sku: string): Promise<ProductWithDetails | undefined>;
   createProduct(product: InsertProduct, oemNumbers?: string[], compatibility?: any[]): Promise<ProductWithDetails>;
   updateProduct(id: number, product: Partial<InsertProduct>, oemNumbers?: string[], compatibility?: any[]): Promise<ProductWithDetails>;
   deleteProduct(id: number): Promise<void>;
@@ -76,6 +77,16 @@ export class DatabaseStorage implements IStorage {
   async getProduct(id: number): Promise<ProductWithDetails | undefined> {
     return await db.query.products.findFirst({
       where: eq(products.id, id),
+      with: {
+        oemNumbers: true,
+        compatibility: true,
+      },
+    });
+  }
+
+  async getProductBySku(sku: string): Promise<ProductWithDetails | undefined> {
+    return await db.query.products.findFirst({
+      where: eq(products.sku, sku),
       with: {
         oemNumbers: true,
         compatibility: true,

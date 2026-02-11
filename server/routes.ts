@@ -8,6 +8,7 @@ import multer from "multer";
 import path from "path";
 import express from "express";
 import fs from "fs";
+import Shopify from "shopify-api-node";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -243,6 +244,168 @@ export async function registerRoutes(
     const period = (req.query.period as string) || 'daily';
     const report = await storage.getActivityReport(period);
     res.json(report);
+  });
+
+  // --- Shopify Integration ---
+  function getShopifyClient(): Shopify | null {
+    const storeUrl = process.env.SHOPIFY_STORE_URL;
+    const apiKey = process.env.SHOPIFY_API_KEY;
+    if (!storeUrl || !apiKey) return null;
+    return new Shopify({
+      shopName: storeUrl.replace('.myshopify.com', ''),
+      accessToken: apiKey,
+      apiVersion: '2024-01',
+      autoLimit: true,
+    });
+  }
+
+  app.get("/api/shopify/status", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) {
+      return res.json({ connected: false, message: "Shopify credentials not configured" });
+    }
+    try {
+      const shop = await shopify.shop.get();
+      res.json({ connected: true, shop: { name: shop.name, domain: shop.domain, email: shop.email, currency: shop.currency, plan: shop.plan_name } });
+    } catch (e: any) {
+      res.json({ connected: false, message: e.message || "Failed to connect to Shopify" });
+    }
+  });
+
+  app.get("/api/shopify/products", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const products = await shopify.product.list({ limit: 250 });
+      res.json(products);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to fetch Shopify products" });
+    }
+  });
+
+  app.post("/api/shopify/import-products", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const shopifyProducts = await shopify.product.list({ limit: 250 });
+      let imported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (const sp of shopifyProducts) {
+        const variant = sp.variants?.[0];
+        const sku = variant?.sku || `SHOPIFY-${sp.id}`;
+        try {
+          const existing = await storage.getProductBySku(sku);
+          if (existing) {
+            skipped++;
+            continue;
+          }
+          await storage.createProduct({
+            sku,
+            name: sp.title,
+            category: sp.product_type || "Imported",
+            brand: sp.vendor || null,
+            costPrice: String(variant?.compare_at_price || variant?.price || "0"),
+            sellingPrice: String(variant?.price || "0"),
+            stockQuantity: variant?.inventory_quantity ?? 0,
+            reorderPoint: 5,
+            imageUrl: sp.image?.src || null,
+          }, [], []);
+          imported++;
+        } catch (e: any) {
+          errors.push(`${sp.title}: ${e.message}`);
+        }
+      }
+      res.json({ imported, skipped, errors, total: shopifyProducts.length });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to import products" });
+    }
+  });
+
+  app.post("/api/shopify/export-products", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const localProducts = await storage.getProducts();
+      let exported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (const lp of localProducts) {
+        try {
+          const shopifyProducts = await shopify.product.list({ limit: 1, title: lp.name });
+          if (shopifyProducts.length > 0) {
+            skipped++;
+            continue;
+          }
+          await shopify.product.create({
+            title: lp.name,
+            product_type: lp.category,
+            vendor: lp.brand || undefined,
+            variants: [{
+              sku: lp.sku,
+              price: String(lp.sellingPrice),
+              compare_at_price: String(lp.costPrice),
+              inventory_management: "shopify",
+              inventory_quantity: lp.stockQuantity,
+            }],
+          });
+          exported++;
+        } catch (e: any) {
+          errors.push(`${lp.name}: ${e.message}`);
+        }
+      }
+      res.json({ exported, skipped, errors, total: localProducts.length });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to export products" });
+    }
+  });
+
+  app.post("/api/shopify/sync-inventory", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const shopifyProducts = await shopify.product.list({ limit: 250 });
+      const localProducts = await storage.getProducts();
+      let synced = 0;
+      const details: any[] = [];
+
+      for (const sp of shopifyProducts) {
+        const variant = sp.variants?.[0];
+        if (!variant) continue;
+        const sku = variant.sku;
+        if (!sku) continue;
+        const local = localProducts.find((p: any) => p.sku === sku);
+        if (!local) continue;
+
+        const shopifyQty = variant.inventory_quantity ?? 0;
+        const localQty = local.stockQuantity;
+        details.push({
+          sku,
+          name: sp.title,
+          shopifyQty,
+          localQty,
+          status: shopifyQty === localQty ? "in_sync" : "out_of_sync",
+        });
+        synced++;
+      }
+
+      res.json({ synced, details });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to sync inventory" });
+    }
+  });
+
+  app.get("/api/shopify/orders", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const orders = await shopify.order.list({ limit: 50, status: "any" });
+      res.json(orders);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to fetch Shopify orders" });
+    }
   });
 
   // Seed data (simple check)

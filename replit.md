@@ -18,6 +18,8 @@ A professional inventory management system for an auto supply business. Includes
 - **Reports**: Activity reports with bar/line charts for sales & purchases (7-day, 30-day, monthly, quarterly, yearly)
 - **Currency**: Philippine Pesos (₱)
 - **Auth**: Custom username/password registration and login with bcrypt password hashing and session-based authentication
+- **Shopify Integration**: Connect to Shopify store to import/export products, view orders, compare inventory levels
+- **Product Images**: Upload product images with preview, stored in /uploads directory
 
 ## Project Structure
 ```
@@ -33,7 +35,7 @@ server/
   replit_integrations/auth/ - Custom auth module (register/login/logout)
 client/src/
   App.tsx            - Router + layout with sidebar
-  pages/             - Dashboard, Inventory, Sales, Purchases, Customers, Vendors, Reports, Login
+  pages/             - Dashboard, Inventory, Sales, Purchases, Customers, Vendors, Reports, Shopify, Login
   components/        - Layout, Sidebar, StatusBadge, ui/
   hooks/             - use-auth, use-products, use-orders, use-parties, use-stats
   lib/               - queryClient, utils, auth-utils

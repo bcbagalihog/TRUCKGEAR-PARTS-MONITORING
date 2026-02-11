@@ -13,6 +13,7 @@ import Purchases from "@/pages/Purchases";
 import Customers from "@/pages/Customers";
 import Vendors from "@/pages/Vendors";
 import Reports from "@/pages/Reports";
+import ShopifyPage from "@/pages/Shopify";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 
@@ -59,6 +60,9 @@ function Router() {
       </Route>
       <Route path="/reports">
         <ProtectedRoute component={Reports} />
+      </Route>
+      <Route path="/shopify">
+        <ProtectedRoute component={ShopifyPage} />
       </Route>
 
       <Route component={NotFound} />

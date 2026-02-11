@@ -9,8 +9,9 @@ import {
   Store, 
   LogOut,
   Settings,
-  BarChart3
+  BarChart3,
 } from "lucide-react";
+import { SiShopify } from "react-icons/si";
 import { useAuth } from "@/hooks/use-auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
@@ -27,6 +28,7 @@ export function Sidebar() {
     { icon: Users, label: "Customers", href: "/customers" },
     { icon: Store, label: "Vendors", href: "/vendors" },
     { icon: BarChart3, label: "Reports", href: "/reports" },
+    { icon: SiShopify, label: "Shopify", href: "/shopify" },
   ];
 
   const getInitials = (name: string) => {
