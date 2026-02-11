@@ -56,8 +56,8 @@ client/src/
 ## API Endpoints
 - `/api/products` (GET, POST), `/api/products/:id` (GET, PUT, DELETE)
 - `/api/customers` (GET, POST), `/api/vendors` (GET, POST)
-- `/api/sales-orders` (GET, POST), `/api/sales-orders/:id` (GET), `/api/sales-orders/:id/status` (PATCH)
-- `/api/purchase-orders` (GET, POST), `/api/purchase-orders/:id` (GET), `/api/purchase-orders/:id/status` (PATCH)
+- `/api/sales-orders` (GET, POST), `/api/sales-orders/:id` (GET, PUT, DELETE), `/api/sales-orders/:id/status` (PATCH)
+- `/api/purchase-orders` (GET, POST), `/api/purchase-orders/:id` (GET, PUT, DELETE), `/api/purchase-orders/:id/status` (PATCH)
 - `/api/stats/dashboard` (GET)
 - `/api/reports/activity?period=` (GET) - periods: daily, 7day, 30day, monthly, quarterly, yearly
 - `/api/auth/register` (POST), `/api/auth/login` (POST), `/api/auth/user` (GET), `/api/auth/logout` (POST)

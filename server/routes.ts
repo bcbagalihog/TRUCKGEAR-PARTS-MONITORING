@@ -163,6 +163,34 @@ export async function registerRoutes(
     res.json(order);
   });
 
+  app.put(api.purchaseOrders.update.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getPurchaseOrder(id);
+      if (!existing) return res.status(404).json({ message: "Order not found" });
+      if (existing.status === 'received') return res.status(400).json({ message: "Cannot edit a received order" });
+      const { items, ...orderData } = api.purchaseOrders.update.input.parse(req.body);
+      const order = await storage.updatePurchaseOrder(id, orderData, items);
+      res.json(order);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json(e.errors);
+      throw e;
+    }
+  });
+
+  app.delete(api.purchaseOrders.delete.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getPurchaseOrder(id);
+      if (!existing) return res.status(404).json({ message: "Order not found" });
+      if (existing.status === 'received') return res.status(400).json({ message: "Cannot delete a received order" });
+      await storage.deletePurchaseOrder(id);
+      res.json({ message: "Order deleted" });
+    } catch (e: any) {
+      throw e;
+    }
+  });
+
   // --- Stats ---
   app.get(api.stats.dashboard.path, async (req, res) => {
     const stats = await storage.getDashboardStats();

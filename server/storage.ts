@@ -43,6 +43,8 @@ export interface IStorage extends IAuthStorage {
   getPurchaseOrder(id: number): Promise<PurchaseOrderWithDetails | undefined>;
   createPurchaseOrder(order: InsertPurchaseOrder, items: InsertPurchaseOrderItem[]): Promise<PurchaseOrderWithDetails>;
   updatePurchaseOrderStatus(id: number, status: string): Promise<PurchaseOrderWithDetails>;
+  updatePurchaseOrder(id: number, order: Partial<InsertPurchaseOrder>, items: InsertPurchaseOrderItem[]): Promise<PurchaseOrderWithDetails>;
+  deletePurchaseOrder(id: number): Promise<void>;
 
   // Dashboard Stats
   getDashboardStats(): Promise<any>;
@@ -374,6 +376,36 @@ export class DatabaseStorage implements IStorage {
         where: eq(purchaseOrders.id, id),
         with: { vendor: true, items: { with: { product: true } } }
       })) as PurchaseOrderWithDetails;
+    });
+  }
+
+  async updatePurchaseOrder(id: number, order: Partial<InsertPurchaseOrder>, items: InsertPurchaseOrderItem[]): Promise<PurchaseOrderWithDetails> {
+    return await db.transaction(async (tx) => {
+      const totalAmount = items.reduce((sum, item) => sum + (Number(item.quantity) * Number(item.unitCost)), 0);
+
+      await tx.update(purchaseOrders)
+        .set({ ...order, totalAmount: String(totalAmount) })
+        .where(eq(purchaseOrders.id, id));
+
+      await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.purchaseOrderId, id));
+
+      if (items.length > 0) {
+        await tx.insert(purchaseOrderItems).values(
+          items.map(item => ({ ...item, purchaseOrderId: id }))
+        );
+      }
+
+      return (await tx.query.purchaseOrders.findFirst({
+        where: eq(purchaseOrders.id, id),
+        with: { vendor: true, items: { with: { product: true } } }
+      })) as PurchaseOrderWithDetails;
+    });
+  }
+
+  async deletePurchaseOrder(id: number): Promise<void> {
+    await db.transaction(async (tx) => {
+      await tx.delete(purchaseOrderItems).where(eq(purchaseOrderItems.purchaseOrderId, id));
+      await tx.delete(purchaseOrders).where(eq(purchaseOrders.id, id));
     });
   }
 
