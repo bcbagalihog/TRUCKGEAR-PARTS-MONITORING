@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.gitignore
+.replit
+replit.nix
+replit.md
+.local
+.config
+.cache
+*.md
+!DEPLOY.md
+attached_assets
+.upm
+.pythonlibs

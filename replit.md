@@ -63,3 +63,10 @@ client/src/
 - `/api/stats/dashboard` (GET)
 - `/api/reports/activity?period=` (GET) - periods: daily, 7day, 30day, monthly, quarterly, yearly
 - `/api/auth/register` (POST), `/api/auth/login` (POST), `/api/auth/user` (GET), `/api/auth/logout` (POST)
+
+## Docker Deployment
+- **Dockerfile**: Multi-stage build (build stage + production stage), runs on port 8080 (configurable via PORT env var)
+- **docker-compose.yml**: Local development with app + PostgreSQL containers
+- **DEPLOY.md**: Step-by-step Google Cloud Run deployment guide
+- Container auto-runs `drizzle-kit push` on startup to create/sync database tables
+- Target region: asia-southeast1 (closest to Philippines)
