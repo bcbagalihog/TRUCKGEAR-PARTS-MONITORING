@@ -32,7 +32,7 @@ export default function POS() {
   const [openingBalance, setOpeningBalance] = useState("0");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // INVENTORY QUERY WITH ARRAY GUARD
+  // INVENTORY QUERY
   const { data: productsData } = useQuery<Product[]>({
     queryKey: ["/api/products", searchTerm],
     queryFn: () =>
@@ -40,7 +40,6 @@ export default function POS() {
     enabled: searchTerm.length > 0,
   });
 
-  // SOP FIX: Ensure products is always an array to prevent .map() errors
   const products = Array.isArray(productsData) ? productsData : [];
 
   // DRAWER SYNC
@@ -54,7 +53,7 @@ export default function POS() {
       .catch(() => setIsDrawerModalOpen(true));
   }, []);
 
-  // --- MATH ENGINE (98% PAPER ACCURATE) ---
+  // --- MATH ENGINE (MATCHED TO DB COLUMN NAMES) ---
   const totalSales = items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.price),
     0,
@@ -62,7 +61,8 @@ export default function POS() {
   const vatableSales = totalSales / 1.12;
   const vatAmount = totalSales - vatableSales;
   const withholdingTax = vatableSales * 0.01;
-  const totalAmountDue = totalSales - withholdingTax;
+  // SOP FIX: Ensure this variable name matches the print-area call
+  const totalAmount_Due = totalSales - withholdingTax;
 
   const handleOpenDrawer = async (bal: string) => {
     try {
@@ -75,21 +75,16 @@ export default function POS() {
       setActiveSession(data);
       setIsDrawerModalOpen(false);
     } catch (e) {
-      toast({ title: "Connection Error", variant: "destructive" });
+      toast({ title: "Drawer Error", variant: "destructive" });
     }
   };
 
   const handleSaveAndPrint = async () => {
     const validItems = items.filter((i) => i.description.trim() !== "");
     if (!activeSession)
-      return toast({ title: "Drawer Closed", variant: "destructive" });
+      return toast({ title: "Open Drawer", variant: "destructive" });
     if (!customer.name || !invoiceNo)
-      return toast({
-        title: "Missing Customer/Invoice#",
-        variant: "destructive",
-      });
-    if (validItems.length === 0)
-      return toast({ title: "No Items Added", variant: "destructive" });
+      return toast({ title: "Required Info Missing", variant: "destructive" });
 
     setIsSaving(true);
     try {
@@ -100,7 +95,7 @@ export default function POS() {
           invoice: {
             invoiceNo,
             customer: { ...customer, type: paymentMethod },
-            totalAmountDue: totalAmountDue.toString(),
+            totalAmountDue: totalAmount_Due.toString(),
             drawerSessionId: activeSession.id,
             paymentMethod: paymentMethod === "CASH SALES" ? "CASH" : "CHARGE",
           },
@@ -113,7 +108,7 @@ export default function POS() {
       });
 
       if (!res.ok) throw new Error();
-      toast({ title: "Success", description: "Saved & Printing..." });
+      toast({ title: "Success", description: "Vaulted and Printing..." });
 
       setTimeout(() => {
         window.print();
@@ -122,11 +117,7 @@ export default function POS() {
         setCustomer({ name: "", tin: "", address: "" });
       }, 500);
     } catch (e) {
-      toast({
-        title: "Error",
-        description: "Database rejected the invoice.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -135,141 +126,113 @@ export default function POS() {
   return (
     <Layout>
       <div className="max-w-7xl mx-auto animate-in fade-in duration-500 print:p-0 print:m-0">
-        {/* TOP INTERFACE */}
+        {/* SCREEN UI (PRINT HIDDEN) */}
         <div className="print:hidden space-y-6">
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-3xl font-bold tracking-tight text-gray-900 uppercase">
-                Sales Invoice Terminal
+                Sales Terminal
               </h1>
-              <p className="text-sm text-gray-500 mt-1 uppercase font-bold tracking-widest">
-                Session:{" "}
-                <span className="text-blue-600">
-                  #{activeSession?.id || "----"}
-                </span>
+              <p className="text-xs text-gray-500 font-black uppercase">
+                Shift: {activeSession?.id || "N/A"}
               </p>
             </div>
             <div className="space-x-3">
               <button
                 onClick={() => setIsInventoryModalOpen(true)}
-                className="bg-white border-2 border-black text-black px-4 py-2 rounded-md font-black hover:bg-gray-50 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] inline-flex items-center transition-all"
+                className="bg-white border-2 border-black text-black px-4 py-2 rounded font-black hover:bg-gray-50"
               >
-                <Search className="w-4 h-4 mr-2" /> Find Part
+                Find Part
               </button>
               <button
                 onClick={handleSaveAndPrint}
                 disabled={isSaving}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-black transition-colors shadow-[4px_4px_0px_0px_rgba(0,0,0,0.2)] inline-flex items-center"
+                className="bg-blue-600 text-white px-6 py-2 rounded font-black hover:bg-blue-700"
               >
                 {isSaving ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  <Loader2 className="animate-spin" />
                 ) : (
-                  <Printer className="w-4 h-4 mr-2" />
-                )}{" "}
-                Finalize & Print
+                  "Finalize & Print"
+                )}
               </button>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 grid grid-cols-2 gap-6">
+          {/* CUSTOMER INFO */}
+          <div className="bg-white p-6 rounded-lg border border-gray-200 grid grid-cols-2 gap-6">
             <div className="space-y-4">
-              <div className="flex gap-4">
-                {["CASH SALES", "CHARGE SALES"].map((term) => (
+              <div className="flex gap-2">
+                {["CASH SALES", "CHARGE SALES"].map((t) => (
                   <button
-                    key={term}
-                    onClick={() => setPaymentMethod(term)}
-                    className={`text-[10px] font-black px-4 py-1.5 rounded border-2 transition-all ${paymentMethod === term ? "border-black bg-black text-white" : "border-gray-200 text-gray-400"}`}
+                    key={t}
+                    onClick={() => setPaymentMethod(t)}
+                    className={`text-[10px] font-black px-3 py-1 border-2 ${paymentMethod === t ? "bg-black text-white" : "text-gray-400"}`}
                   >
-                    {term}
+                    {t}
                   </button>
                 ))}
               </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                  Registered Name
-                </label>
-                <input
-                  type="text"
-                  className="w-full border p-2 rounded outline-none uppercase font-black"
-                  value={customer.name}
-                  onChange={(e) =>
-                    setCustomer({ ...customer, name: e.target.value })
-                  }
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                  Address
-                </label>
-                <input
-                  type="text"
-                  className="w-full border p-2 rounded outline-none uppercase font-medium"
-                  value={customer.address}
-                  onChange={(e) =>
-                    setCustomer({ ...customer, address: e.target.value })
-                  }
-                />
-              </div>
+              <input
+                placeholder="REGISTERED NAME"
+                className="w-full border p-2 font-black uppercase"
+                value={customer.name}
+                onChange={(e) =>
+                  setCustomer({ ...customer, name: e.target.value })
+                }
+              />
+              <input
+                placeholder="ADDRESS"
+                className="w-full border p-2 font-medium uppercase"
+                value={customer.address}
+                onChange={(e) =>
+                  setCustomer({ ...customer, address: e.target.value })
+                }
+              />
             </div>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 pt-10">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                    Invoice #
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full border-2 border-gray-100 p-2 rounded font-mono text-red-600 font-black outline-none"
-                    value={invoiceNo}
-                    onChange={(e) => setInvoiceNo(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full border p-2 rounded outline-none font-bold"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                  TIN
-                </label>
+              <div className="grid grid-cols-2 gap-4">
                 <input
-                  type="text"
-                  className="w-full border p-2 rounded outline-none font-bold"
-                  value={customer.tin}
-                  onChange={(e) =>
-                    setCustomer({ ...customer, tin: e.target.value })
-                  }
+                  placeholder="INVOICE #"
+                  className="w-full border-2 p-2 font-mono text-red-600 font-black"
+                  value={invoiceNo}
+                  onChange={(e) => setInvoiceNo(e.target.value)}
+                />
+                <input
+                  type="date"
+                  className="w-full border p-2 font-bold"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
                 />
               </div>
+              <input
+                placeholder="TIN"
+                className="w-full border p-2 font-bold"
+                value={customer.tin}
+                onChange={(e) =>
+                  setCustomer({ ...customer, tin: e.target.value })
+                }
+              />
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-gray-50 border-b">
-                <tr className="text-[10px] uppercase font-black text-gray-500">
-                  <th className="p-4 w-1/2">Item Description</th>
+          {/* TABLE */}
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 font-black text-xs text-gray-500 uppercase">
+                <tr>
+                  <th className="p-4">Description</th>
                   <th className="p-4">Qty</th>
-                  <th className="p-4">Unit Price</th>
+                  <th className="p-4">Price</th>
                   <th className="p-4 text-right">Amount</th>
-                  <th className="p-4 text-center"></th>
+                  <th></th>
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody>
                 {items.map((item, index) => (
-                  <tr key={index}>
+                  <tr key={index} className="border-t">
                     <td className="p-2">
                       <input
-                        type="text"
-                        className="w-full p-2 border rounded uppercase font-bold text-sm"
+                        className="w-full p-2 uppercase font-bold"
                         value={item.description}
                         onChange={(e) => {
                           const n = [...items];
@@ -278,10 +241,10 @@ export default function POS() {
                         }}
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="p-2 w-20">
                       <input
                         type="number"
-                        className="w-full p-2 border rounded font-bold"
+                        className="w-full p-2 font-bold"
                         value={item.qty}
                         onChange={(e) => {
                           const n = [...items];
@@ -290,10 +253,10 @@ export default function POS() {
                         }}
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="p-2 w-32">
                       <input
                         type="number"
-                        className="w-full p-2 border rounded font-bold"
+                        className="w-full p-2 font-bold"
                         value={item.price}
                         onChange={(e) => {
                           const n = [...items];
@@ -302,72 +265,70 @@ export default function POS() {
                         }}
                       />
                     </td>
-                    <td className="p-4 text-right font-mono font-bold text-blue-800">
+                    <td className="p-4 text-right font-mono font-bold">
                       ₱
                       {(item.qty * item.price).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                       })}
                     </td>
-                    <td className="p-2 text-center">
+                    <td className="text-center">
                       <button
                         onClick={() =>
                           setItems(items.filter((_, i) => i !== index))
                         }
-                        className="text-red-300 hover:text-red-600 transition-colors"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="h-4 w-4 text-red-300" />
                       </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div className="p-4 border-t bg-gray-50">
-              <button
-                onClick={() =>
-                  setItems([...items, { description: "", qty: 1, price: 0 }])
-                }
-                className="text-xs font-black text-blue-600 uppercase flex items-center hover:underline"
-              >
-                <Plus className="w-4 h-4 mr-1" /> Manual Entry
-              </button>
-            </div>
+            <button
+              onClick={() =>
+                setItems([...items, { description: "", qty: 1, price: 0 }])
+              }
+              className="p-4 text-xs font-black text-blue-600 uppercase"
+            >
+              + Add Row
+            </button>
           </div>
 
+          {/* TOTALS */}
           <div className="flex justify-end pt-4">
-            <div className="w-96 bg-white p-6 rounded-lg shadow-sm border-2 border-gray-100 space-y-3">
-              <div className="flex justify-between text-xs font-bold uppercase text-gray-400">
-                <span>VATable Sales:</span>
-                <span className="text-black font-black">
+            <div className="w-96 bg-white p-6 rounded-lg border-2 space-y-3">
+              <div className="flex justify-between text-xs font-bold text-gray-400">
+                <span>VATable Sales</span>
+                <span>
                   ₱
                   {vatableSales.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}
                 </span>
               </div>
-              <div className="flex justify-between text-xs font-bold uppercase text-gray-400">
-                <span>VAT (12%):</span>
-                <span className="text-black font-black">
+              <div className="flex justify-between text-xs font-bold text-gray-400">
+                <span>VAT (12%)</span>
+                <span>
                   ₱
                   {vatAmount.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}
                 </span>
               </div>
-              <div className="flex justify-between text-xs font-bold uppercase text-red-500">
-                <span>Less: WHT (1%):</span>
-                <span className="font-black">
-                  - ₱
+              <div className="flex justify-between text-xs font-bold text-red-500">
+                <span>WHT (1%)</span>
+                <span>
+                  -₱
                   {withholdingTax.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}
                 </span>
               </div>
-              <div className="border-t-2 border-black pt-3 flex justify-between font-black text-3xl uppercase tracking-tighter">
-                <span>Total Due:</span>
+              <div className="border-t-2 border-black pt-3 flex justify-between font-black text-3xl">
+                <span>Total Due</span>
                 <span className="text-blue-700 font-mono">
                   ₱
-                  {totalAmountDue.toLocaleString(undefined, {
+                  {totalAmount_Due.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
                   })}
                 </span>
@@ -376,56 +337,58 @@ export default function POS() {
           </div>
         </div>
 
-        {/* INVENTORY MODAL (SOP FIX APPLIED HERE) */}
+        {/* INVENTORY MODAL */}
         {isInventoryModalOpen && (
-          <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white p-10 rounded-2xl w-full max-w-2xl shadow-2xl border-4 border-black">
-              <div className="flex gap-4 border-b-2 border-black pb-4 items-center">
-                <Search className="text-blue-600 w-8 h-8" />
+          <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4">
+            <div className="bg-white p-8 rounded-2xl w-full max-w-2xl border-4 border-black">
+              <div className="flex gap-4 border-b-2 border-black pb-4">
+                <Search />
                 <input
-                  placeholder="SEARCH TRUCK GEAR..."
-                  className="flex-1 outline-none font-black uppercase text-2xl"
+                  placeholder="SEARCH SKU..."
+                  className="flex-1 font-black uppercase text-2xl outline-none"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   autoFocus
                 />
               </div>
-              <div className="max-h-[400px] overflow-y-auto space-y-1 mt-4">
-                {products.length > 0 ? (
-                  products.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        const selected = {
-                          description: p.name.toUpperCase(),
-                          qty: 1,
-                          price: Number(p.sellingPrice),
-                        };
-                        setItems((prev) =>
-                          prev.length === 1 && prev[0].description === ""
-                            ? [selected]
-                            : [...prev, selected],
-                        );
-                        setIsInventoryModalOpen(false);
-                        setSearchTerm("");
-                      }}
-                      className="w-full p-4 text-left border rounded hover:bg-black hover:text-white transition-all flex justify-between font-bold uppercase text-xs"
-                    >
-                      <span>
-                        {p.sku} — {p.name}
-                      </span>
-                      <span>₱{Number(p.sellingPrice).toLocaleString()}</span>
-                    </button>
-                  ))
-                ) : (
-                  <p className="p-10 text-center text-gray-400 font-bold uppercase text-xs tracking-widest">
-                    No matching parts found.
-                  </p>
-                )}
+              <div className="max-h-80 overflow-y-auto mt-4">
+                {products.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setItems((prev) =>
+                        prev.length === 1 && prev[0].description === ""
+                          ? [
+                              {
+                                description: p.name.toUpperCase(),
+                                qty: 1,
+                                price: Number(p.sellingPrice),
+                              },
+                            ]
+                          : [
+                              ...prev,
+                              {
+                                description: p.name.toUpperCase(),
+                                qty: 1,
+                                price: Number(p.sellingPrice),
+                              },
+                            ],
+                      );
+                      setIsInventoryModalOpen(false);
+                      setSearchTerm("");
+                    }}
+                    className="w-full p-4 border-b flex justify-between font-bold uppercase text-xs hover:bg-black hover:text-white transition-all"
+                  >
+                    <span>
+                      {p.sku} - {p.name}
+                    </span>
+                    <span>₱{Number(p.sellingPrice).toLocaleString()}</span>
+                  </button>
+                ))}
               </div>
               <button
                 onClick={() => setIsInventoryModalOpen(false)}
-                className="w-full mt-6 py-2 text-[10px] font-black uppercase text-gray-300"
+                className="w-full mt-4 text-[10px] font-black uppercase text-gray-300"
               >
                 Close
               </button>
@@ -435,29 +398,27 @@ export default function POS() {
 
         {/* DRAWER MODAL */}
         {isDrawerModalOpen && (
-          <div className="fixed inset-0 bg-slate-950 z-[300] flex items-center justify-center">
-            <div className="bg-white p-12 rounded-[2.5rem] text-center space-y-8 w-[450px] shadow-2xl border-b-8 border-black">
-              <Banknote className="mx-auto h-20 w-20 text-black" />
-              <h2 className="text-3xl font-black uppercase tracking-tighter">
-                Initialize Terminal
-              </h2>
+          <div className="fixed inset-0 bg-black z-[300] flex items-center justify-center">
+            <div className="bg-white p-12 rounded-[3rem] text-center space-y-8 w-96 shadow-2xl border-4 border-black/10">
+              <Banknote className="mx-auto h-20 w-20 text-blue-600" />
+              <h2 className="text-2xl font-black uppercase">Open Terminal</h2>
               <input
                 type="number"
-                className="w-full p-6 border-4 border-black text-center text-6xl font-black rounded-3xl"
+                className="w-full p-4 border-4 border-black text-center text-5xl font-black rounded-3xl"
                 value={openingBalance}
                 onChange={(e) => setOpeningBalance(e.target.value)}
               />
               <button
                 onClick={() => handleOpenDrawer(openingBalance)}
-                className="w-full bg-black text-white py-8 rounded-3xl font-black uppercase tracking-widest text-xl"
+                className="w-full bg-black text-white py-6 rounded-2xl font-black uppercase tracking-widest text-lg"
               >
-                Open Terminal
+                Start Shift
               </button>
             </div>
           </div>
         )}
 
-        {/* --- PRESERVED CALIBRATED PRINT AREA --- */}
+        {/* CALIBRATED PRINT AREA */}
         <div
           id="print-area"
           className="hidden print:block font-sans text-black text-[13px] relative"
@@ -568,6 +529,7 @@ export default function POS() {
           >
             {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
+          {/* SOP FIX: This now points to totalAmount_Due defined in the Math Engine */}
           <div
             style={{
               position: "absolute",
