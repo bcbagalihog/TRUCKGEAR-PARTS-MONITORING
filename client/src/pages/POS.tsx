@@ -18,6 +18,7 @@ export default function POS() {
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [activeSession, setActiveSession] = useState<any>(null);
+  const [isInitialized, setIsInitialized] = useState(false); // New: Prevents blank screen hang
 
   // MODAL STATES
   const [isDrawerModalOpen, setIsDrawerModalOpen] = useState(false);
@@ -42,26 +43,36 @@ export default function POS() {
 
   const products = Array.isArray(productsData) ? productsData : [];
 
-  // DRAWER SYNC
+  // DRAWER SYNC (SOP CORRECTIVE FOR VITE 7)
   useEffect(() => {
-    fetch("/api/pos/drawer-status")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.active) setActiveSession(data.session);
-        else setIsDrawerModalOpen(true);
-      })
-      .catch(() => setIsDrawerModalOpen(true));
+    const checkStatus = async () => {
+      try {
+        const res = await fetch("/api/pos/drawer-status");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.active) {
+            setActiveSession(data.session);
+          } else {
+            setIsDrawerModalOpen(true);
+          }
+        }
+      } catch (e) {
+        setIsDrawerModalOpen(true);
+      } finally {
+        setIsInitialized(true); // Ensure the app renders regardless of fetch result
+      }
+    };
+    checkStatus();
   }, []);
 
-  // --- MATH ENGINE (MATCHED TO DB COLUMN NAMES) ---
+  // --- MATH ENGINE ---
   const totalSales = items.reduce(
-    (sum, item) => sum + Number(item.qty) * Number(item.price),
+    (sum, item) => sum + Number(item.qty || 0) * Number(item.price || 0),
     0,
   );
   const vatableSales = totalSales / 1.12;
   const vatAmount = totalSales - vatableSales;
   const withholdingTax = vatableSales * 0.01;
-  // SOP FIX: Ensure this variable name matches the print-area call
   const totalAmount_Due = totalSales - withholdingTax;
 
   const handleOpenDrawer = async (bal: string) => {
@@ -84,7 +95,7 @@ export default function POS() {
     if (!activeSession)
       return toast({ title: "Open Drawer", variant: "destructive" });
     if (!customer.name || !invoiceNo)
-      return toast({ title: "Required Info Missing", variant: "destructive" });
+      return toast({ title: "Info Missing", variant: "destructive" });
 
     setIsSaving(true);
     try {
@@ -108,7 +119,7 @@ export default function POS() {
       });
 
       if (!res.ok) throw new Error();
-      toast({ title: "Success", description: "Vaulted and Printing..." });
+      toast({ title: "Success" });
 
       setTimeout(() => {
         window.print();
@@ -117,40 +128,44 @@ export default function POS() {
         setCustomer({ name: "", tin: "", address: "" });
       }, 500);
     } catch (e) {
-      toast({ title: "Error", variant: "destructive" });
+      toast({ title: "Save Failed", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
   };
 
+  // SOP FIX: If not initialized, show a simple loader to prevent white screen hang
+  if (!isInitialized) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-white uppercase font-black text-xs tracking-widest">
+        Booting Terminal...
+      </div>
+    );
+  }
+
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto animate-in fade-in duration-500 print:p-0 print:m-0">
-        {/* SCREEN UI (PRINT HIDDEN) */}
+      <div className="max-w-7xl mx-auto p-4 md:p-10">
+        {/* VIEW 1: SCREEN UI */}
         <div className="print:hidden space-y-6">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight text-gray-900 uppercase">
-                Sales Terminal
-              </h1>
-              <p className="text-xs text-gray-500 font-black uppercase">
-                Shift: {activeSession?.id || "N/A"}
-              </p>
-            </div>
-            <div className="space-x-3">
+          <div className="flex justify-between items-end border-b-4 border-black pb-6">
+            <h1 className="text-4xl font-black uppercase tracking-tighter">
+              Terminal V3
+            </h1>
+            <div className="flex gap-4">
               <button
                 onClick={() => setIsInventoryModalOpen(true)}
-                className="bg-white border-2 border-black text-black px-4 py-2 rounded font-black hover:bg-gray-50"
+                className="border-2 border-black px-4 py-2 font-black uppercase text-xs hover:bg-black hover:text-white transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none"
               >
                 Find Part
               </button>
               <button
                 onClick={handleSaveAndPrint}
                 disabled={isSaving}
-                className="bg-blue-600 text-white px-6 py-2 rounded font-black hover:bg-blue-700"
+                className="bg-blue-600 border-2 border-blue-600 text-white px-4 py-2 font-black uppercase text-xs hover:bg-blue-700 shadow-[4px_4px_0px_0px_rgba(37,99,235,0.3)]"
               >
                 {isSaving ? (
-                  <Loader2 className="animate-spin" />
+                  <Loader2 className="animate-spin w-4 h-4" />
                 ) : (
                   "Finalize & Print"
                 )}
@@ -158,15 +173,14 @@ export default function POS() {
             </div>
           </div>
 
-          {/* CUSTOMER INFO */}
-          <div className="bg-white p-6 rounded-lg border border-gray-200 grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-10 bg-gray-50 p-8 border-2 border-gray-100 rounded-2xl">
             <div className="space-y-4">
               <div className="flex gap-2">
                 {["CASH SALES", "CHARGE SALES"].map((t) => (
                   <button
                     key={t}
                     onClick={() => setPaymentMethod(t)}
-                    className={`text-[10px] font-black px-3 py-1 border-2 ${paymentMethod === t ? "bg-black text-white" : "text-gray-400"}`}
+                    className={`px-4 py-1 text-[10px] font-black border-2 transition-all ${paymentMethod === t ? "bg-black text-white border-black" : "text-gray-400 border-gray-200"}`}
                   >
                     {t}
                   </button>
@@ -174,7 +188,7 @@ export default function POS() {
               </div>
               <input
                 placeholder="REGISTERED NAME"
-                className="w-full border p-2 font-black uppercase"
+                className="w-full bg-transparent border-b-2 border-black/10 p-2 font-black uppercase outline-none focus:border-black"
                 value={customer.name}
                 onChange={(e) =>
                   setCustomer({ ...customer, name: e.target.value })
@@ -182,31 +196,31 @@ export default function POS() {
               />
               <input
                 placeholder="ADDRESS"
-                className="w-full border p-2 font-medium uppercase"
+                className="w-full bg-transparent border-b-2 border-black/10 p-2 font-medium uppercase outline-none"
                 value={customer.address}
                 onChange={(e) =>
                   setCustomer({ ...customer, address: e.target.value })
                 }
               />
             </div>
-            <div className="space-y-4">
+            <div className="space-y-4 pt-10">
               <div className="grid grid-cols-2 gap-4">
                 <input
-                  placeholder="INVOICE #"
-                  className="w-full border-2 p-2 font-mono text-red-600 font-black"
+                  placeholder="INV #"
+                  className="w-full bg-transparent border-b-2 border-black/10 p-2 font-mono text-red-600 font-black outline-none"
                   value={invoiceNo}
                   onChange={(e) => setInvoiceNo(e.target.value)}
                 />
                 <input
                   type="date"
-                  className="w-full border p-2 font-bold"
+                  className="w-full bg-transparent border-b-2 border-black/10 p-2 font-bold outline-none"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                 />
               </div>
               <input
                 placeholder="TIN"
-                className="w-full border p-2 font-bold"
+                className="w-full bg-transparent border-b-2 border-black/10 p-2 font-bold outline-none"
                 value={customer.tin}
                 onChange={(e) =>
                   setCustomer({ ...customer, tin: e.target.value })
@@ -215,89 +229,86 @@ export default function POS() {
             </div>
           </div>
 
-          {/* TABLE */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 font-black text-xs text-gray-500 uppercase">
-                <tr>
-                  <th className="p-4">Description</th>
-                  <th className="p-4">Qty</th>
-                  <th className="p-4">Price</th>
-                  <th className="p-4 text-right">Amount</th>
-                  <th></th>
+          <table className="w-full text-left">
+            <thead className="border-b-4 border-black text-[10px] font-black uppercase text-gray-400">
+              <tr>
+                <th className="p-4">Description</th>
+                <th className="p-4">Qty</th>
+                <th className="p-4">Price</th>
+                <th className="p-4 text-right">Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y-2 divide-gray-50">
+              {items.map((item, index) => (
+                <tr key={index}>
+                  <td className="p-2">
+                    <input
+                      className="w-full p-2 uppercase font-bold text-sm bg-transparent outline-none"
+                      value={item.description}
+                      onChange={(e) => {
+                        const n = [...items];
+                        n[index].description = e.target.value;
+                        setItems(n);
+                      }}
+                    />
+                  </td>
+                  <td className="p-2 w-24">
+                    <input
+                      type="number"
+                      className="w-full p-2 font-bold bg-transparent outline-none"
+                      value={item.qty}
+                      onChange={(e) => {
+                        const n = [...items];
+                        n[index].qty = Number(e.target.value);
+                        setItems(n);
+                      }}
+                    />
+                  </td>
+                  <td className="p-2 w-32">
+                    <input
+                      type="number"
+                      className="w-full p-2 font-bold bg-transparent outline-none"
+                      value={item.price}
+                      onChange={(e) => {
+                        const n = [...items];
+                        n[index].price = Number(e.target.value);
+                        setItems(n);
+                      }}
+                    />
+                  </td>
+                  <td className="p-4 text-right font-mono font-black text-blue-600">
+                    ₱
+                    {(item.qty * item.price).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
+                  </td>
+                  <td className="p-2">
+                    <button
+                      onClick={() =>
+                        setItems(items.filter((_, i) => i !== index))
+                      }
+                      className="text-red-300 hover:text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={index} className="border-t">
-                    <td className="p-2">
-                      <input
-                        className="w-full p-2 uppercase font-bold"
-                        value={item.description}
-                        onChange={(e) => {
-                          const n = [...items];
-                          n[index].description = e.target.value;
-                          setItems(n);
-                        }}
-                      />
-                    </td>
-                    <td className="p-2 w-20">
-                      <input
-                        type="number"
-                        className="w-full p-2 font-bold"
-                        value={item.qty}
-                        onChange={(e) => {
-                          const n = [...items];
-                          n[index].qty = Number(e.target.value);
-                          setItems(n);
-                        }}
-                      />
-                    </td>
-                    <td className="p-2 w-32">
-                      <input
-                        type="number"
-                        className="w-full p-2 font-bold"
-                        value={item.price}
-                        onChange={(e) => {
-                          const n = [...items];
-                          n[index].price = Number(e.target.value);
-                          setItems(n);
-                        }}
-                      />
-                    </td>
-                    <td className="p-4 text-right font-mono font-bold">
-                      ₱
-                      {(item.qty * item.price).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                      })}
-                    </td>
-                    <td className="text-center">
-                      <button
-                        onClick={() =>
-                          setItems(items.filter((_, i) => i !== index))
-                        }
-                      >
-                        <Trash2 className="h-4 w-4 text-red-300" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button
-              onClick={() =>
-                setItems([...items, { description: "", qty: 1, price: 0 }])
-              }
-              className="p-4 text-xs font-black text-blue-600 uppercase"
-            >
-              + Add Row
-            </button>
-          </div>
+              ))}
+            </tbody>
+          </table>
+          <button
+            onClick={() =>
+              setItems([...items, { description: "", qty: 1, price: 0 }])
+            }
+            className="text-xs font-black text-blue-600 uppercase hover:underline"
+          >
+            + Add Entry
+          </button>
 
-          {/* TOTALS */}
-          <div className="flex justify-end pt-4">
-            <div className="w-96 bg-white p-6 rounded-lg border-2 space-y-3">
-              <div className="flex justify-between text-xs font-bold text-gray-400">
+          <div className="flex justify-end pt-10">
+            <div className="w-96 space-y-2 border-t-4 border-black pt-6">
+              <div className="flex justify-between text-xs font-bold text-gray-400 uppercase">
                 <span>VATable Sales</span>
                 <span>
                   ₱
@@ -306,7 +317,7 @@ export default function POS() {
                   })}
                 </span>
               </div>
-              <div className="flex justify-between text-xs font-bold text-gray-400">
+              <div className="flex justify-between text-xs font-bold text-gray-400 uppercase">
                 <span>VAT (12%)</span>
                 <span>
                   ₱
@@ -315,7 +326,7 @@ export default function POS() {
                   })}
                 </span>
               </div>
-              <div className="flex justify-between text-xs font-bold text-red-500">
+              <div className="flex justify-between text-xs font-bold text-red-500 uppercase">
                 <span>WHT (1%)</span>
                 <span>
                   -₱
@@ -324,9 +335,9 @@ export default function POS() {
                   })}
                 </span>
               </div>
-              <div className="border-t-2 border-black pt-3 flex justify-between font-black text-3xl">
+              <div className="flex justify-between font-black text-4xl tracking-tighter uppercase pt-2">
                 <span>Total Due</span>
-                <span className="text-blue-700 font-mono">
+                <span className="text-blue-700">
                   ₱
                   {totalAmount_Due.toLocaleString(undefined, {
                     minimumFractionDigits: 2,
@@ -337,80 +348,67 @@ export default function POS() {
           </div>
         </div>
 
-        {/* INVENTORY MODAL */}
+        {/* MODALS */}
         {isInventoryModalOpen && (
-          <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4">
-            <div className="bg-white p-8 rounded-2xl w-full max-w-2xl border-4 border-black">
-              <div className="flex gap-4 border-b-2 border-black pb-4">
-                <Search />
+          <div className="fixed inset-0 bg-black/90 z-[200] flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-white p-10 border-4 border-black w-full max-w-2xl">
+              <div className="flex gap-4 border-b-4 border-black pb-4">
+                <Search className="w-8 h-8" />
                 <input
                   placeholder="SEARCH SKU..."
-                  className="flex-1 font-black uppercase text-2xl outline-none"
+                  className="flex-1 font-black uppercase text-3xl outline-none"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   autoFocus
                 />
               </div>
-              <div className="max-h-80 overflow-y-auto mt-4">
+              <div className="max-h-80 overflow-y-auto mt-6">
                 {products.map((p) => (
                   <button
                     key={p.id}
                     onClick={() => {
+                      const sel = {
+                        description: p.name.toUpperCase(),
+                        qty: 1,
+                        price: Number(p.sellingPrice),
+                      };
                       setItems((prev) =>
                         prev.length === 1 && prev[0].description === ""
-                          ? [
-                              {
-                                description: p.name.toUpperCase(),
-                                qty: 1,
-                                price: Number(p.sellingPrice),
-                              },
-                            ]
-                          : [
-                              ...prev,
-                              {
-                                description: p.name.toUpperCase(),
-                                qty: 1,
-                                price: Number(p.sellingPrice),
-                              },
-                            ],
+                          ? [sel]
+                          : [...prev, sel],
                       );
                       setIsInventoryModalOpen(false);
                       setSearchTerm("");
                     }}
-                    className="w-full p-4 border-b flex justify-between font-bold uppercase text-xs hover:bg-black hover:text-white transition-all"
+                    className="w-full p-4 border-b flex justify-between font-black uppercase text-xs hover:bg-black hover:text-white transition-all"
                   >
                     <span>
-                      {p.sku} - {p.name}
+                      {p.sku} — {p.name}
                     </span>
                     <span>₱{Number(p.sellingPrice).toLocaleString()}</span>
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => setIsInventoryModalOpen(false)}
-                className="w-full mt-4 text-[10px] font-black uppercase text-gray-300"
-              >
-                Close
-              </button>
             </div>
           </div>
         )}
 
-        {/* DRAWER MODAL */}
         {isDrawerModalOpen && (
           <div className="fixed inset-0 bg-black z-[300] flex items-center justify-center">
-            <div className="bg-white p-12 rounded-[3rem] text-center space-y-8 w-96 shadow-2xl border-4 border-black/10">
-              <Banknote className="mx-auto h-20 w-20 text-blue-600" />
-              <h2 className="text-2xl font-black uppercase">Open Terminal</h2>
+            <div className="bg-white p-12 border-8 border-black text-center space-y-8 w-96 shadow-[20px_20px_0px_0px_rgba(37,99,235,1)]">
+              <Banknote className="mx-auto h-20 w-20" />
+              <h2 className="text-2xl font-black uppercase tracking-tighter">
+                Open Terminal
+              </h2>
               <input
                 type="number"
-                className="w-full p-4 border-4 border-black text-center text-5xl font-black rounded-3xl"
+                className="w-full p-4 border-4 border-black text-center text-5xl font-black outline-none"
                 value={openingBalance}
                 onChange={(e) => setOpeningBalance(e.target.value)}
               />
               <button
                 onClick={() => handleOpenDrawer(openingBalance)}
-                className="w-full bg-black text-white py-6 rounded-2xl font-black uppercase tracking-widest text-lg"
+                className="w-full bg-black text-white py-6 font-black uppercase tracking-widest text-lg"
               >
                 Start Shift
               </button>
@@ -418,7 +416,7 @@ export default function POS() {
           </div>
         )}
 
-        {/* CALIBRATED PRINT AREA */}
+        {/* --- PRINT AREA --- */}
         <div
           id="print-area"
           className="hidden print:block font-sans text-black text-[13px] relative"
@@ -529,7 +527,6 @@ export default function POS() {
           >
             {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
-          {/* SOP FIX: This now points to totalAmount_Due defined in the Math Engine */}
           <div
             style={{
               position: "absolute",
