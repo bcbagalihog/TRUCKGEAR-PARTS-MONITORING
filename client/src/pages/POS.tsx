@@ -578,7 +578,7 @@ export default function POS() {
               fontWeight: "bold",
             }}
           >
-            {totalAmountDue.toLocaleString(undefined, {
+            {totalAmount_Due.toLocaleString(undefined, {
               minimumFractionDigits: 2,
             })}
           </div>
