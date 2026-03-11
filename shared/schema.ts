@@ -79,7 +79,7 @@ export const vendors = pgTable("vendors", {
 // === CASH DRAWER MANAGEMENT ===
 export const drawerSessions = pgTable("drawer_sessions", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id")
+  userId: varchar("user_id")
     .notNull()
     .references(() => users.id),
   startTime: timestamp("start_time").defaultNow().notNull(),
@@ -221,13 +221,41 @@ export const insertSalesInvoiceItemSchema = createInsertSchema(
 
 // === TYPES ===
 export type Product = typeof products.$inferSelect;
+export type InsertProduct = typeof products.$inferInsert;
 export type Customer = typeof customers.$inferSelect;
+export type InsertCustomer = typeof customers.$inferInsert;
 export type Vendor = typeof vendors.$inferSelect;
+export type InsertVendor = typeof vendors.$inferInsert;
 export type DrawerSession = typeof drawerSessions.$inferSelect;
 export type SalesInvoice = typeof salesInvoices.$inferSelect;
 export type SalesInvoiceItem = typeof salesInvoiceItems.$inferSelect;
 export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type InsertPurchaseOrder = typeof purchaseOrders.$inferInsert;
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type InsertPurchaseOrderItem = typeof purchaseOrderItems.$inferInsert;
 export type SalesOrder = typeof salesOrders.$inferSelect;
+export type InsertSalesOrder = typeof salesOrders.$inferInsert;
 export type SalesOrderItem = typeof salesOrderItems.$inferSelect;
+export type InsertSalesOrderItem = typeof salesOrderItems.$inferInsert;
+
+// === COMPLEX TYPES ===
+export type ProductWithDetails = Product & {
+  oemNumbers: string[];
+  compatibility: Array<{
+    id: number;
+    productId: number;
+    make: string;
+    model: string;
+    yearStart: number | null;
+    yearEnd: number | null;
+  }>;
+};
+export type SalesOrderWithDetails = SalesOrder & {
+  items: SalesOrderItem[];
+  customer?: Customer;
+};
+export type PurchaseOrderWithDetails = PurchaseOrder & {
+  items: PurchaseOrderItem[];
+  vendor?: Vendor;
+};

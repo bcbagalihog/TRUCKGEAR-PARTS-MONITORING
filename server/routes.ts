@@ -77,7 +77,7 @@ export async function registerRoutes(
           invoiceNumber: invoice.invoiceNo,
           registeredName: invoice.customer.name,
           tin: invoice.customer.tin || "",
-          totalAmountDue: invoice.totalAmountDue.toString(),
+          totalAmount_Due: invoice.totalAmountDue.toString(),
           drawerSessionId: invoice.drawerSessionId,
           paymentMethod: invoice.paymentMethod || "CASH", // Supports GCASH/BANK
           companyId: 1,
