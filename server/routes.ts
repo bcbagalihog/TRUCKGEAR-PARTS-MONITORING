@@ -10,8 +10,11 @@ import express from "express";
 import fs from "fs";
 import Shopify from "shopify-api-node";
 import { db } from "./db";
-import { eq, and, desc, ilike, inArray } from "drizzle-orm";
-import { salesInvoices, salesInvoiceItems, drawerSessions } from "@shared/schema";
+import { eq, and, desc, ilike, inArray, gte, lte, sql } from "drizzle-orm";
+import {
+  salesInvoices, salesInvoiceItems, drawerSessions,
+  accountsPayable, counterReceiptChecks, purchaseOrders,
+} from "@shared/schema";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadsDir)) {
@@ -237,6 +240,175 @@ export async function registerRoutes(
     const period = (req.query.period as string) || 'daily';
     const report = await storage.getActivityReport(period);
     res.json(report);
+  });
+
+  // --- Business Report (comprehensive) ---
+  app.get("/api/reports/business", isAuthenticated, async (req, res) => {
+    try {
+      const today = new Date();
+      const todayStr = today.toISOString().split("T")[0];
+      const tomorrowStr = new Date(today.getTime() + 86400000).toISOString().split("T")[0];
+
+      // 1. Today's sales invoices
+      const todayInvoices = await db
+        .select()
+        .from(salesInvoices)
+        .where(and(
+          gte(salesInvoices.createdAt, new Date(todayStr)),
+          lte(salesInvoices.createdAt, new Date(tomorrowStr))
+        ));
+
+      const byMethod = { CASH: 0, GCASH: 0, CHECK: 0, NET_DAYS: 0 };
+      let invoiceTotal = 0;
+      for (const inv of todayInvoices) {
+        const amt = Number(inv.totalAmount_Due || 0);
+        invoiceTotal += amt;
+        const m = (inv.paymentMethod || "CASH").toUpperCase() as keyof typeof byMethod;
+        if (m in byMethod) byMethod[m] += amt;
+      }
+      const paymentsRecorded = byMethod.CASH + byMethod.GCASH + byMethod.CHECK + byMethod.NET_DAYS;
+      const discrepancy = Math.abs(invoiceTotal - paymentsRecorded);
+
+      // 2. Today's purchase orders received
+      const todayPOs = await db
+        .select()
+        .from(purchaseOrders)
+        .where(and(
+          eq(purchaseOrders.status, "received"),
+          gte(purchaseOrders.orderDate, new Date(todayStr)),
+          lte(purchaseOrders.orderDate, new Date(tomorrowStr))
+        ));
+      const todayPurchaseTotal = todayPOs.reduce((s, p) => s + Number(p.totalAmount || 0), 0);
+
+      // 3. 30-day revenue vs expense (by day)
+      const thirtyDaysAgo = new Date(today.getTime() - 30 * 86400000);
+      const last30Sales = await db.execute(sql`
+        SELECT DATE(created_at) as day, SUM(total_amount_due) as total
+        FROM sales_invoices
+        WHERE created_at >= ${thirtyDaysAgo.toISOString()}
+        GROUP BY DATE(created_at)
+        ORDER BY day
+      `);
+      const last30Purchases = await db.execute(sql`
+        SELECT DATE(order_date) as day, SUM(total_amount) as total
+        FROM purchase_orders
+        WHERE status = 'received' AND order_date >= ${thirtyDaysAgo.toISOString()}
+        GROUP BY DATE(order_date)
+        ORDER BY day
+      `);
+
+      // Merge 30-day data
+      const dayMap = new Map<string, { day: string; sales: number; purchases: number }>();
+      for (const row of last30Sales.rows as any[]) {
+        const d = String(row.day).split("T")[0];
+        dayMap.set(d, { day: d, sales: Number(row.total || 0), purchases: 0 });
+      }
+      for (const row of last30Purchases.rows as any[]) {
+        const d = String(row.day).split("T")[0];
+        const existing = dayMap.get(d);
+        if (existing) existing.purchases = Number(row.total || 0);
+        else dayMap.set(d, { day: d, sales: 0, purchases: Number(row.total || 0) });
+      }
+      const thirtyDayData = Array.from(dayMap.values()).sort((a, b) => a.day.localeCompare(b.day))
+        .map((r) => ({ ...r, day: r.day.slice(5) })); // MM-DD format
+
+      // 4. Payment method breakdown (all-time from salesInvoices)
+      const pmBreakdown = await db.execute(sql`
+        SELECT payment_method, COUNT(*) as count, SUM(total_amount_due) as total
+        FROM sales_invoices
+        GROUP BY payment_method
+      `);
+
+      // 5. AR Aging (UNPAID invoices)
+      const arAging = await db.execute(sql`
+        SELECT
+          SUM(CASE WHEN EXTRACT(DAY FROM NOW() - created_at) <= 30 THEN total_amount_due ELSE 0 END) as current_amount,
+          SUM(CASE WHEN EXTRACT(DAY FROM NOW() - created_at) > 30 AND EXTRACT(DAY FROM NOW() - created_at) <= 60 THEN total_amount_due ELSE 0 END) as thirty_sixty,
+          SUM(CASE WHEN EXTRACT(DAY FROM NOW() - created_at) > 60 THEN total_amount_due ELSE 0 END) as overdue
+        FROM sales_invoices
+        WHERE status = 'UNPAID'
+      `);
+
+      // 6. Cash flow projection (next 4 weeks - supplier check maturity dates)
+      const fourWeeksAhead = new Date(today.getTime() + 28 * 86400000);
+      const upcomingChecks = await db
+        .select()
+        .from(counterReceiptChecks)
+        .where(and(
+          gte(counterReceiptChecks.checkDate, todayStr),
+          lte(counterReceiptChecks.checkDate, fourWeeksAhead.toISOString().split("T")[0])
+        ));
+
+      // Group by week
+      const weekMap = new Map<string, number>();
+      for (let w = 0; w < 4; w++) {
+        const weekStart = new Date(today.getTime() + w * 7 * 86400000);
+        const label = `Week ${w + 1} (${weekStart.toLocaleDateString("en-PH", { month: "short", day: "numeric" })})`;
+        weekMap.set(label, 0);
+      }
+      for (const chk of upcomingChecks) {
+        if (!chk.checkDate) continue;
+        const chkDate = new Date(chk.checkDate);
+        const diffDays = Math.floor((chkDate.getTime() - today.getTime()) / 86400000);
+        const weekIdx = Math.min(Math.floor(diffDays / 7), 3);
+        const weekStart = new Date(today.getTime() + weekIdx * 7 * 86400000);
+        const label = `Week ${weekIdx + 1} (${weekStart.toLocaleDateString("en-PH", { month: "short", day: "numeric" })})`;
+        weekMap.set(label, (weekMap.get(label) || 0) + Number(chk.amount || 0));
+      }
+      const cashFlow = Array.from(weekMap.entries()).map(([week, amount]) => ({ week, amount }));
+
+      // 7. Accounting totals
+      const sevenDaysAhead = new Date(today.getTime() + 7 * 86400000);
+      const arResult = await db.execute(sql`
+        SELECT COALESCE(SUM(total_amount_due), 0) as total FROM sales_invoices WHERE status = 'UNPAID'
+      `);
+      const apResult = await db.execute(sql`
+        SELECT COALESCE(SUM(amount_due), 0) as total FROM accounts_payable WHERE status IN ('PENDING_COUNTER', 'COUNTERED')
+      `);
+      const outflowResult = await db.execute(sql`
+        SELECT COALESCE(SUM(amount), 0) as total FROM counter_receipt_checks
+        WHERE check_date >= ${todayStr} AND check_date <= ${sevenDaysAhead.toISOString().split("T")[0]}
+      `);
+      const pendingAPResult = await db.execute(sql`
+        SELECT COALESCE(SUM(amount_due), 0) as total FROM accounts_payable WHERE status = 'PENDING_COUNTER'
+      `);
+
+      res.json({
+        todaySales: {
+          total: invoiceTotal,
+          count: todayInvoices.length,
+          byMethod,
+          paymentsRecorded,
+          discrepancy,
+        },
+        todayPurchases: {
+          total: todayPurchaseTotal,
+          count: todayPOs.length,
+          pendingAP: Number((pendingAPResult.rows[0] as any)?.total || 0),
+        },
+        thirtyDayData,
+        paymentBreakdown: (pmBreakdown.rows as any[]).map((r) => ({
+          method: r.payment_method || "CASH",
+          count: Number(r.count),
+          total: Number(r.total || 0),
+        })),
+        arAging: {
+          current: Number((arAging.rows[0] as any)?.current_amount || 0),
+          thirtyToSixty: Number((arAging.rows[0] as any)?.thirty_sixty || 0),
+          overdue: Number((arAging.rows[0] as any)?.overdue || 0),
+        },
+        cashFlow,
+        totals: {
+          totalAR: Number((arResult.rows[0] as any)?.total || 0),
+          totalAP: Number((apResult.rows[0] as any)?.total || 0),
+          projectedOutflow: Number((outflowResult.rows[0] as any)?.total || 0),
+        },
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("business report error:", err);
+      res.status(500).json({ error: "Failed to generate business report" });
+    }
   });
 
   // --- POS: Drawer Management ---
