@@ -1693,6 +1693,32 @@ export default function Accounting() {
               </div>
             </div>
 
+            {/* Summary Stats */}
+            {supplierChecks.length > 0 && (
+              <div className="px-5 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-white rounded-xl border border-indigo-100 px-5 py-4 shadow-sm text-center">
+                    <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">Total Issued Amount</p>
+                    <p data-testid="stat-total-check-amount" className="text-2xl font-extrabold text-indigo-700 tracking-tight">
+                      ₱{grandTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm text-center">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Checks Issued</p>
+                    <p data-testid="stat-total-check-count" className="text-2xl font-extrabold text-gray-800">
+                      {supplierChecks.length}
+                    </p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-gray-100 px-5 py-4 shadow-sm text-center">
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Suppliers</p>
+                    <p data-testid="stat-total-check-suppliers" className="text-2xl font-extrabold text-gray-800">
+                      {new Set(supplierChecks.map((c) => c.vendorName)).size}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Table */}
             {isLoadingSupplierChecks ? (
               <div className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></div>
