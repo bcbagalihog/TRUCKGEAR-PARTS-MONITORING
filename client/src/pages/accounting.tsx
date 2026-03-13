@@ -338,12 +338,18 @@ export default function Accounting() {
     const fmt = (d: Date) => d.toISOString().split("T")[0];
     if (period === "today") return { start: fmt(now), end: fmt(now) };
     if (period === "week") {
-      const s = new Date(now); s.setDate(now.getDate() - 6);
-      return { start: fmt(s), end: fmt(now) };
+      // Current Mon–Sun week
+      const day = now.getDay(); // 0=Sun … 6=Sat
+      const diffToMon = (day === 0 ? -6 : 1 - day);
+      const mon = new Date(now); mon.setDate(now.getDate() + diffToMon);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      return { start: fmt(mon), end: fmt(sun) };
     }
     if (period === "month") {
-      const s = new Date(now); s.setDate(1);
-      return { start: fmt(s), end: fmt(now) };
+      // Full calendar month (1st to last day) — includes post-dated checks
+      const s = new Date(now.getFullYear(), now.getMonth(), 1);
+      const e = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start: fmt(s), end: fmt(e) };
     }
     return { start: checkCustomStart, end: checkCustomEnd };
   };
@@ -1750,6 +1756,35 @@ export default function Accounting() {
                 </table>
               </div>
             )}
+
+            {/* ── Below-table Summary ── */}
+            <div className="px-5 py-4 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-6 text-sm text-gray-500">
+                  <span>
+                    <span className="font-semibold text-gray-700">{supplierChecks.length}</span> check{supplierChecks.length !== 1 ? "s" : ""}
+                  </span>
+                  <span>
+                    <span className="font-semibold text-gray-700">{new Set(supplierChecks.map((c) => c.vendorName)).size}</span> supplier{new Set(supplierChecks.map((c) => c.vendorName)).size !== 1 ? "s" : ""}
+                  </span>
+                  <span className="text-gray-300">|</span>
+                  <span className="text-xs text-gray-400 italic">
+                    {(() => {
+                      const { start, end } = getDateRange(checkPeriod);
+                      if (checkPeriod === "today") return `Today (${start})`;
+                      if (checkPeriod === "month") return `${new Date(start + "T00:00:00").toLocaleDateString("en-PH", { month: "long", year: "numeric" })}`;
+                      return `${start} → ${end}`;
+                    })()}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-bold text-gray-600 uppercase tracking-wide">Total Issued</span>
+                  <div className="bg-indigo-700 text-white px-6 py-2.5 rounded-xl shadow font-extrabold text-lg tracking-tight" data-testid="total-issued-below">
+                    ₱{grandTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         );
       })()}
