@@ -221,7 +221,9 @@ export default function Accounting() {
 
   const [isLocked, setIsLocked] = useState(true);
   const [pin, setPin] = useState("");
-  const [activeTab, setActiveTab] = useState<"payable" | "billing" | "receipt">("payable");
+  const [activeTab, setActiveTab] = useState<"payable" | "billing" | "receipt" | "checks">("payable");
+  const [checkSummary, setCheckSummary] = useState<any[]>([]);
+  const [isLoadingChecks, setIsLoadingChecks] = useState(false);
 
   // ── Accounts Payable ──────────────────────────────────────────────────────
   const [bills, setBills] = useState<Bill[]>([]);
@@ -264,6 +266,14 @@ export default function Accounting() {
   const [isSavingReceipt, setIsSavingReceipt] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
+  const fetchCheckSummary = () => {
+    setIsLoadingChecks(true);
+    fetch("/api/sales-invoices?paymentMethod=CHECK")
+      .then((r) => r.json())
+      .then((data) => { setCheckSummary(data); setIsLoadingChecks(false); })
+      .catch(() => setIsLoadingChecks(false));
+  };
+
   useEffect(() => {
     if (!isLocked) {
       fetchBills();
@@ -272,11 +282,20 @@ export default function Accounting() {
   }, [isLocked]);
 
   useEffect(() => {
+    if (!isLocked && activeTab === "checks") fetchCheckSummary();
+  }, [activeTab, isLocked]);
+
+  useEffect(() => {
     if (!customerSearch.trim()) { setBillingLines([]); return; }
     const filtered = allInvoices.filter((inv) =>
       inv.registeredName.toLowerCase().includes(customerSearch.toLowerCase())
     );
-    setBillingLines(filtered.map((inv) => ({ invoice: inv, drNo: "", poNo: "", selected: false })));
+    setBillingLines(filtered.map((inv) => ({
+      invoice: inv,
+      drNo: inv.invoiceNumber || "",
+      poNo: (inv as any).poNumber || "",
+      selected: true,
+    })));
   }, [customerSearch, allInvoices]);
 
   const fetchBills = (vendorFilter?: string, statusFilter?: string) => {
@@ -291,7 +310,10 @@ export default function Accounting() {
   };
 
   const fetchInvoices = () => {
-    fetch("/api/sales-invoices").then((r) => r.json()).then(setAllInvoices).catch(() => {});
+    fetch("/api/sales-invoices?status=UNPAID")
+      .then((r) => r.json())
+      .then(setAllInvoices)
+      .catch(() => {});
   };
 
   const fetchPendingForVendor = async () => {
@@ -474,13 +496,25 @@ export default function Accounting() {
   const billingTotal = billingLines.filter((l) => l.selected).reduce((s, l) => s + Number(l.invoice.totalAmount_Due), 0);
 
   const handleGenerateBilling = async () => {
-    if (!billingLines.filter((l) => l.selected).length) {
+    const selected = billingLines.filter((l) => l.selected);
+    if (!selected.length) {
       toast({ title: "No invoices selected", variant: "destructive" }); return;
     }
     setIsGeneratingBilling(true);
     try {
-      await generateBillingPDF(billingLines.find((l) => l.selected)!.invoice.registeredName, billingLines, billingDate);
-      toast({ title: "PDF Generated!" });
+      await generateBillingPDF(selected[0].invoice.registeredName, billingLines, billingDate);
+      // Mark selected invoices as BILLED
+      const ids = selected.map((l) => l.invoice.id).filter(Boolean) as number[];
+      if (ids.length > 0) {
+        await fetch("/api/sales-invoices/bulk-status", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids, status: "BILLED" }),
+        });
+        fetchInvoices();
+        setCustomerSearch("");
+      }
+      toast({ title: "Billing PDF generated & invoices marked as BILLED" });
     } catch { toast({ title: "Error", variant: "destructive" }); }
     finally { setIsGeneratingBilling(false); }
   };
@@ -532,11 +566,12 @@ export default function Accounting() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
         {[
           { key: "payable", label: "Accounts Payable", icon: Wallet },
           { key: "billing", label: "Billing Collection", icon: FileText },
           { key: "receipt", label: "Supplier Counter Receipt", icon: Printer },
+          { key: "checks", label: "Check Summary", icon: CheckSquare },
         ].map(({ key, label, icon: Icon }) => (
           <button key={key} data-testid={`tab-${key}`}
             onClick={() => setActiveTab(key as any)}
@@ -968,6 +1003,74 @@ export default function Accounting() {
               <p className="text-xs text-gray-400 mt-3">Fetch pending invoices in Step 1 first to enable saving.</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ══ CHECK SUMMARY TAB ═══════════════════════════════════════════════ */}
+      {activeTab === "checks" && (
+        <div className="space-y-5">
+          <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                <CheckSquare className="h-4 w-4 text-purple-600" /> Check Payment Registry
+              </h3>
+              <p className="text-xs text-gray-400 mt-1">All invoices paid by check from the POS terminal.</p>
+            </div>
+            <button onClick={fetchCheckSummary} disabled={isLoadingChecks}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-md flex items-center gap-2 text-sm font-medium">
+              {isLoadingChecks ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Refresh
+            </button>
+          </div>
+          {isLoadingChecks ? (
+            <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400">Loading check summary...</div>
+          ) : checkSummary.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400">
+              No check payments recorded yet. Check payments from the POS will appear here.
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-left border-collapse text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b text-xs uppercase tracking-wider text-gray-500 font-bold">
+                    <th className="p-3">Invoice No.</th>
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Customer</th>
+                    <th className="p-3">Bank</th>
+                    <th className="p-3">Check No.</th>
+                    <th className="p-3">Maturity Date</th>
+                    <th className="p-3 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {checkSummary.map((inv: any) => (
+                    <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="p-3 font-mono font-bold text-blue-700">{inv.invoiceNumber}</td>
+                      <td className="p-3 text-gray-600 text-xs">{new Date(inv.date).toLocaleDateString("en-PH")}</td>
+                      <td className="p-3 text-gray-800 font-medium">{inv.registeredName}</td>
+                      <td className="p-3 text-gray-600">{inv.checkBankName || "—"}</td>
+                      <td className="p-3 font-mono text-gray-700">{inv.checkNumber || "—"}</td>
+                      <td className="p-3 text-gray-600 text-xs">
+                        {inv.checkMaturityDate ? new Date(inv.checkMaturityDate).toLocaleDateString("en-PH") : "—"}
+                      </td>
+                      <td className="p-3 text-right font-bold">
+                        ₱{Number(inv.totalAmount_Due).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-yellow-50 border-t-2 border-yellow-200">
+                    <td colSpan={6} className="px-4 py-3 text-right text-sm font-bold text-yellow-800">TOTAL CHECKS</td>
+                    <td className="px-4 py-3 text-right font-bold text-yellow-900">
+                      ₱{checkSummary.reduce((s: number, inv: any) => s + Number(inv.totalAmount_Due || 0), 0)
+                          .toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

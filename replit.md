@@ -20,7 +20,12 @@ A professional inventory management system for an auto supply business. Includes
 - **Auth**: Custom username/password registration and login with bcrypt password hashing and session-based authentication
 - **Shopify Integration**: Connect to Shopify store to import/export products, view orders, compare inventory levels
 - **Product Images**: Upload product images with preview, stored in /uploads directory
-- **Accounting Module** (PIN: 8888): Three tabs — Accounts Payable (bill management with AI scan), Billing Collection (select customer invoices → generate PDF with logo/table/yellow total box), Counter Receipt (multiple check payments → PDF for supplier)
+- **POS Payment Methods**: Cash, GCash (ref#), Check (bank/checkNo/maturityDate), NET Days (days/PO# → saves as UNPAID → links to Billing Collection)
+- **Accounting Module** (PIN: 8888): Four tabs:
+  - Accounts Payable: daily invoice log with PENDING_COUNTER/COUNTERED statuses, quick-add form, AI scan, vendor/status filters
+  - Billing Collection: fetch UNPAID invoices by customer, checkbox selection, generate PDF (logo/table/yellow total), marks as BILLED
+  - Supplier Counter Receipt: fetch AP invoices by vendor, Installment Generator (split total into N weekly checks), save & mark COUNTERED, PDF export
+  - Check Summary: registry of all CHECK payment invoices from POS (bank, check no., maturity date, amount)
 - **PDF Generation**: jsPDF + jspdf-autotable; Billing Collection PDF has company logo, BILLING COLLECTION title, Date/Invoice/DR/PO/Amount table, yellow total box. Counter Receipt PDF has check details table and yellow total box.
 
 ## Project Structure
@@ -31,13 +36,14 @@ shared/
   models/auth.ts     - Auth-related schemas (users, sessions)
 server/
   index.ts           - Server entry point
+  build.ts           - Production build script (esbuild + vite)
   db.ts              - Database connection
   storage.ts         - DatabaseStorage class (all CRUD)
   routes.ts          - Express API route handlers + seed data
   replit_integrations/auth/ - Custom auth module (register/login/logout)
 client/src/
   App.tsx            - Router + layout with sidebar
-  pages/             - Dashboard, Inventory, Sales, Purchases, Customers, Vendors, Reports, Shopify, Login
+  pages/             - Dashboard, Inventory, Sales, Purchases, Customers, Vendors, Reports, Shopify, Login, POS, Accounting
   components/        - Layout, Sidebar, StatusBadge, ui/
   hooks/             - use-auth, use-products, use-orders, use-parties, use-stats
   lib/               - queryClient, utils, auth-utils
@@ -49,6 +55,12 @@ client/src/
 - Custom/non-inventory items are skipped during stock adjustments
 - All changes are logged in `inventory_transactions` table
 
+## salesInvoices Status Flow
+- PAID: Cash / GCash / Check payments (paid at point of sale)
+- UNPAID: NET Days payments (awaiting collection)
+- BILLED: After Billing Collection PDF is generated and saved
+- DRAFT: Legacy/unused
+
 ## Database Tables
 - products, product_oem_numbers, product_compatibility
 - customers, vendors
@@ -56,6 +68,16 @@ client/src/
 - purchase_orders, purchase_order_items
 - inventory_transactions
 - users, sessions (auth)
+- drawer_sessions, drawer_expenses
+- sales_invoices (VAT invoices with payment method fields), sales_invoice_items
+- accounts_payable
+- counter_receipts, counter_receipt_checks
+
+## salesInvoices Payment Method Fields
+- paymentMethod: CASH | GCASH | CHECK | NET_DAYS
+- gcashRef: GCash reference number (GCASH only)
+- checkBankName, checkNumber, checkMaturityDate (CHECK only)
+- netDays, poNumber (NET_DAYS only)
 
 ## API Endpoints
 - `/api/products` (GET, POST), `/api/products/:id` (GET, PUT, DELETE)
@@ -65,13 +87,18 @@ client/src/
 - `/api/stats/dashboard` (GET)
 - `/api/reports/activity?period=` (GET) - periods: daily, 7day, 30day, monthly, quarterly, yearly
 - `/api/auth/register` (POST), `/api/auth/login` (POST), `/api/auth/user` (GET), `/api/auth/logout` (POST)
-- `/api/sales-invoices` (GET) - list all VAT invoices (used by Billing Collection)
+- `/api/vat-invoices` (POST) - create VAT invoice with payment method data
+- `/api/sales-invoices` (GET, ?status=, ?paymentMethod=, ?registeredName=) - list invoices with filters
+- `/api/sales-invoices/bulk-status` (PATCH) - bulk update invoice status (e.g. mark as BILLED)
 - `/api/accounts-payable` (GET, POST), `/api/accounts-payable/:id` (PUT), `/api/accounts-payable/:id/receive` (POST)
+- `/api/counter-receipts` (GET, POST), `/api/counter-receipts/:id` (GET)
 - `/api/admin/users` (GET, POST), `/api/admin/users/:id/toggle-status` (PATCH)
+- `/api/pos/drawer-open` (POST), `/api/pos/drawer-close` (POST), `/api/pos/drawer-status` (GET), `/api/pos/expense` (POST)
 
 ## Docker Deployment
 - **Dockerfile**: Multi-stage build (build stage + production stage), runs on port 8080 (configurable via PORT env var)
+- **server/build.ts**: Build script that runs vite build (frontend) + esbuild (backend) → outputs to dist/
 - **docker-compose.yml**: Local development with app + PostgreSQL containers
 - **DEPLOY.md**: Step-by-step Google Cloud Run deployment guide
-- Container auto-runs `drizzle-kit push` on startup to create/sync database tables
+- Container auto-runs `drizzle-kit push --force` on startup to create/sync database tables
 - Target region: asia-southeast1 (closest to Philippines)

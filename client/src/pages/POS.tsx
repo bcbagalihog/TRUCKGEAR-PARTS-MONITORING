@@ -4,12 +4,10 @@ import {
   Printer,
   Plus,
   Trash2,
-  Save,
   Loader2,
   Search,
   Banknote,
   X,
-  logOut,
   ArrowUpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -43,6 +41,16 @@ export default function POS() {
   });
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(0);
   const [items, setItems] = useState([{ description: "", qty: 1, price: 0 }]);
+
+  // PAYMENT METHOD STATES
+  type PayMethod = "CASH" | "GCASH" | "CHECK" | "NET_DAYS";
+  const [paymentMethod, setPaymentMethod] = useState<PayMethod>("CASH");
+  const [gcashRef, setGcashRef] = useState("");
+  const [checkBankName, setCheckBankName] = useState("");
+  const [checkNumber, setCheckNumber] = useState("");
+  const [checkMaturityDate, setCheckMaturityDate] = useState("");
+  const [netDays, setNetDays] = useState("30");
+  const [poNumber, setPoNumber] = useState("");
 
   // INVENTORY QUERY
   const { data: productsData } = useQuery<Product[]>({
@@ -108,11 +116,15 @@ export default function POS() {
     setIsDrawerModalOpen(true);
   };
 
-  // --- SAVE & PRINT ENGINE (FIXED) ---
+  // --- SAVE & PRINT ENGINE ---
   const handleSaveToVault = async () => {
     const validItems = items.filter((i) => i.description.trim() !== "");
-    if (!customer.name || !invoiceNo)
-      return toast({ title: "Missing Info", variant: "destructive" });
+    if (!invoiceNo)
+      return toast({ title: "Invoice number is required", variant: "destructive" });
+    if (paymentMethod === "NET_DAYS" && !customer.name)
+      return toast({ title: "Customer name is required for NET Days", variant: "destructive" });
+    if (!customer.name)
+      return toast({ title: "Customer / Registered Name is required", variant: "destructive" });
     if (!activeSession) return setIsDrawerModalOpen(true);
 
     setIsSaving(true);
@@ -128,6 +140,13 @@ export default function POS() {
           withholdingTax: withholdingTax.toFixed(2),
           totalAmountDue: totalAmount_Due.toFixed(2),
           drawerSessionId: activeSession.id,
+          paymentMethod,
+          gcashRef: paymentMethod === "GCASH" ? gcashRef : undefined,
+          checkBankName: paymentMethod === "CHECK" ? checkBankName : undefined,
+          checkNumber: paymentMethod === "CHECK" ? checkNumber : undefined,
+          checkMaturityDate: paymentMethod === "CHECK" ? checkMaturityDate : undefined,
+          netDays: paymentMethod === "NET_DAYS" ? Number(netDays) : undefined,
+          poNumber: paymentMethod === "NET_DAYS" ? poNumber : undefined,
         },
         items: validItems.map((i) => ({ ...i, price: i.price.toString() })),
       };
@@ -139,10 +158,19 @@ export default function POS() {
       });
 
       if (!res.ok) throw new Error();
-      toast({ title: "Invoice Vaulted" });
+      const label = paymentMethod === "NET_DAYS" ? "Invoice saved as UNPAID (NET Days)" : "Invoice Vaulted";
+      toast({ title: label });
       window.print();
+      // Reset form
       setItems([{ description: "", qty: 1, price: 0 }]);
       setInvoiceNo("");
+      setCustomer({ name: "", tin: "", address: "", type: "CASH SALES" });
+      setGcashRef("");
+      setCheckBankName("");
+      setCheckNumber("");
+      setCheckMaturityDate("");
+      setNetDays("30");
+      setPoNumber("");
     } catch (error) {
       toast({ title: "Error Saving", variant: "destructive" });
     } finally {
@@ -368,33 +396,150 @@ export default function POS() {
             </div>
           </div>
 
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-between items-start pt-4 gap-4">
+            {/* PAYMENT METHOD PANEL */}
+            <div className="flex-1 bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
+              <p className="text-xs font-bold uppercase text-gray-500">Payment Method</p>
+              <div className="grid grid-cols-4 gap-2">
+                {(["CASH", "GCASH", "CHECK", "NET_DAYS"] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setPaymentMethod(m)}
+                    className={`py-2 px-3 rounded-lg text-sm font-bold uppercase border-2 transition-all ${
+                      paymentMethod === m
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-200 bg-gray-50 text-gray-600 hover:border-blue-300"
+                    }`}
+                  >
+                    {m === "NET_DAYS" ? "NET Days" : m}
+                  </button>
+                ))}
+              </div>
+
+              {/* GCash Fields */}
+              {paymentMethod === "GCASH" && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">GCash Reference No.</label>
+                  <input
+                    type="text"
+                    className="w-full border p-2 rounded outline-none font-mono font-bold"
+                    placeholder="e.g. 1234567890"
+                    value={gcashRef}
+                    onChange={(e) => setGcashRef(e.target.value)}
+                  />
+                </div>
+              )}
+
+              {/* Check Fields */}
+              {paymentMethod === "CHECK" && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Bank Name</label>
+                    <input
+                      type="text"
+                      className="w-full border p-2 rounded outline-none uppercase font-bold text-sm"
+                      placeholder="e.g. BDO"
+                      value={checkBankName}
+                      onChange={(e) => setCheckBankName(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Check Number</label>
+                    <input
+                      type="text"
+                      className="w-full border p-2 rounded outline-none font-mono font-bold text-sm"
+                      placeholder="0000000"
+                      value={checkNumber}
+                      onChange={(e) => setCheckNumber(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Maturity Date</label>
+                    <input
+                      type="date"
+                      className="w-full border p-2 rounded outline-none font-bold text-sm"
+                      value={checkMaturityDate}
+                      onChange={(e) => setCheckMaturityDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* NET Days Fields */}
+              {paymentMethod === "NET_DAYS" && (
+                <div className="space-y-2">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700 font-bold uppercase">
+                    Customer selection is required. Invoice will be saved as UNPAID and linked to Billing Collection.
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">NET Days</label>
+                      <select
+                        className="w-full border p-2 rounded outline-none font-bold"
+                        value={netDays}
+                        onChange={(e) => setNetDays(e.target.value)}
+                      >
+                        <option value="15">NET 15</option>
+                        <option value="30">NET 30</option>
+                        <option value="45">NET 45</option>
+                        <option value="60">NET 60</option>
+                        <option value="90">NET 90</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">P.O. Number</label>
+                      <input
+                        type="text"
+                        className="w-full border p-2 rounded outline-none font-mono font-bold text-sm"
+                        placeholder="PO-XXXXXX"
+                        value={poNumber}
+                        onChange={(e) => setPoNumber(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* TOTALS PANEL */}
             <div className="w-80 bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-3">
               <div className="flex justify-between text-xs font-bold uppercase text-gray-500">
                 <span>VATable Sales</span>
                 <span className="font-mono">
-                  ₱
-                  {vatableSales.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                  })}
+                  ₱{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="flex justify-between text-xs font-bold uppercase text-gray-500">
                 <span>VAT (12%)</span>
                 <span className="font-mono">
-                  ₱
-                  {vatAmount.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                  })}
+                  ₱{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
+              {withholdingTax > 0 && (
+                <div className="flex justify-between text-xs font-bold uppercase text-gray-500">
+                  <span>WHT ({withholdingTaxRate}%)</span>
+                  <span className="font-mono text-red-500">
+                    -₱{withholdingTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
               <div className="border-t pt-2 flex justify-between font-black text-2xl uppercase tracking-tighter text-blue-700">
                 <span>Total Due</span>
                 <span className="font-mono">
-                  ₱
-                  {totalAmount_Due.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                  })}
+                  ₱{totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="pt-1 text-center">
+                <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase ${
+                  paymentMethod === "NET_DAYS"
+                    ? "bg-amber-100 text-amber-700"
+                    : paymentMethod === "CHECK"
+                    ? "bg-purple-100 text-purple-700"
+                    : paymentMethod === "GCASH"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-green-100 text-green-700"
+                }`}>
+                  {paymentMethod === "NET_DAYS" ? `NET ${netDays}` : paymentMethod}
                 </span>
               </div>
             </div>

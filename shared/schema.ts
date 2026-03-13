@@ -194,15 +194,30 @@ export const counterReceiptChecks = pgTable("counter_receipt_checks", {
 });
 
 // === SALES INVOICES (VAT OUTPUT) ===
+// paymentMethod: CASH | GCASH | CHECK | NET_DAYS
+// status: DRAFT | PAID | UNPAID | BILLED | COUNTERED
 export const salesInvoices = pgTable("sales_invoices", {
   id: serial("id").primaryKey(),
   invoiceNumber: text("invoice_number").notNull(),
   date: timestamp("date").defaultNow().notNull(),
   registeredName: text("registered_name").notNull(),
   tin: text("tin"),
+  businessAddress: text("business_address"),
   totalAmount_Due: numeric("total_amount_due").notNull(),
-  status: text("status").default("DRAFT"),
+  vatableSales: numeric("vatable_sales"),
+  vatAmount: numeric("vat_amount"),
+  withholdingTax: numeric("withholding_tax"),
+  status: text("status").default("PAID"),
   paymentMethod: text("payment_method").default("CASH"),
+  // GCash fields
+  gcashRef: text("gcash_ref"),
+  // Check fields
+  checkBankName: text("check_bank_name"),
+  checkNumber: text("check_number"),
+  checkMaturityDate: date("check_maturity_date"),
+  // NET Days fields
+  netDays: integer("net_days"),
+  poNumber: text("po_number"),
   drawerSessionId: integer("drawer_session_id").references(
     () => drawerSessions.id,
   ),

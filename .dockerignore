@@ -8,8 +8,16 @@ replit.md
 .local
 .config
 .cache
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
 *.md
 !DEPLOY.md
 attached_assets
 .upm
 .pythonlibs
+migrations
+coverage
+.env
+.env.*

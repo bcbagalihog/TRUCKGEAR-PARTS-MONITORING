@@ -10,7 +10,7 @@ import express from "express";
 import fs from "fs";
 import Shopify from "shopify-api-node";
 import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, ilike, inArray } from "drizzle-orm";
 import { salesInvoices, salesInvoiceItems, drawerSessions } from "@shared/schema";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -394,13 +394,18 @@ export async function registerRoutes(
     }
   });
 
-  // --- Sales Invoices List (for Billing Collection) ---
+  // --- Sales Invoices List (for Billing Collection & Check Summary) ---
   app.get("/api/sales-invoices", isAuthenticated, async (req, res) => {
     try {
-      const invoices = await db
-        .select()
-        .from(salesInvoices)
-        .orderBy(desc(salesInvoices.date));
+      const { status, paymentMethod, registeredName } = req.query as Record<string, string>;
+      const conditions: any[] = [];
+      if (status) conditions.push(eq(salesInvoices.status, status));
+      if (paymentMethod) conditions.push(eq(salesInvoices.paymentMethod, paymentMethod));
+      if (registeredName) conditions.push(ilike(salesInvoices.registeredName, `%${registeredName}%`));
+      let q = db.select().from(salesInvoices).$dynamic();
+      if (conditions.length === 1) q = q.where(conditions[0]);
+      else if (conditions.length > 1) q = q.where(and(...conditions));
+      const invoices = await q.orderBy(desc(salesInvoices.date));
       res.json(invoices);
     } catch (err) {
       console.error("sales-invoices list error:", err);
@@ -408,19 +413,48 @@ export async function registerRoutes(
     }
   });
 
+  // --- Bulk update sales invoice status (e.g. mark as BILLED) ---
+  app.patch("/api/sales-invoices/bulk-status", isAuthenticated, async (req, res) => {
+    try {
+      const { ids, status } = req.body as { ids: number[]; status: string };
+      if (!ids?.length) return res.json({ updated: 0 });
+      await db.update(salesInvoices).set({ status }).where(inArray(salesInvoices.id, ids));
+      res.json({ updated: ids.length });
+    } catch (err) {
+      console.error("bulk-status error:", err);
+      res.status(500).json({ error: "Failed to update status" });
+    }
+  });
+
   // --- POS: VAT Invoices ---
   app.post("/api/vat-invoices", isAuthenticated, async (req, res) => {
     try {
       const { invoice, items } = req.body;
+      const method = (invoice.paymentMethod || "CASH").toUpperCase();
+      const isNet = method === "NET_DAYS";
       const [newInv] = await db
         .insert(salesInvoices)
         .values({
           invoiceNumber: invoice.invoiceNo,
           registeredName: invoice.customer?.name || "Walk-in Customer",
           tin: invoice.customer?.tin || "",
+          businessAddress: invoice.customer?.address || "",
           "totalAmount_Due": String(invoice.totalAmountDue ?? invoice.totalAmount_Due ?? 0),
+          vatableSales: invoice.vatableSales ? String(invoice.vatableSales) : null,
+          vatAmount: invoice.vatAmount ? String(invoice.vatAmount) : null,
+          withholdingTax: invoice.withholdingTax ? String(invoice.withholdingTax) : null,
           drawerSessionId: invoice.drawerSessionId || null,
-          paymentMethod: invoice.paymentMethod || "CASH",
+          paymentMethod: method,
+          status: isNet ? "UNPAID" : "PAID",
+          // GCash
+          gcashRef: method === "GCASH" ? (invoice.gcashRef || null) : null,
+          // Check
+          checkBankName: method === "CHECK" ? (invoice.checkBankName || null) : null,
+          checkNumber: method === "CHECK" ? (invoice.checkNumber || null) : null,
+          checkMaturityDate: method === "CHECK" ? (invoice.checkMaturityDate || null) : null,
+          // NET Days
+          netDays: isNet ? (invoice.netDays || null) : null,
+          poNumber: isNet ? (invoice.poNumber || null) : null,
           companyId: 1,
         })
         .returning();

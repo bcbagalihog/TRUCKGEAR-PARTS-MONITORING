@@ -28,4 +28,4 @@ ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "npx drizzle-kit push --force && node dist/index.cjs"]
+CMD ["sh", "-c", "npx drizzle-kit push --force && node dist/index.js"]
