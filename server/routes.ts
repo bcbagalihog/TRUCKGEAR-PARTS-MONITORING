@@ -654,7 +654,17 @@ export async function registerRoutes(
   app.put("/api/sales-invoices/:id", isAuthenticated, async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const { items, ...invoiceData } = req.body;
+      const { items, ...raw } = req.body;
+      // Sanitize empty strings → null for date and integer columns to prevent Postgres type errors
+      const invoiceData = {
+        ...raw,
+        checkMaturityDate: raw.checkMaturityDate || null,
+        netDays: raw.netDays !== "" && raw.netDays != null ? Number(raw.netDays) : null,
+        gcashRef: raw.gcashRef || null,
+        checkBankName: raw.checkBankName || null,
+        checkNumber: raw.checkNumber || null,
+        poNumber: raw.poNumber || null,
+      };
       await db.update(salesInvoices).set(invoiceData).where(eq(salesInvoices.id, id));
       if (Array.isArray(items)) {
         await db.delete(salesInvoiceItems).where(eq(salesInvoiceItems.salesInvoiceId, id));

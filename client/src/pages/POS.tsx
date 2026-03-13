@@ -1078,10 +1078,11 @@ export default function POS() {
                       <span>VAT (12%)</span>
                       <span className="font-mono">₱{Number(isEditing ? (editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) - editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) / 1.12) : (selectedInvoice.vatAmount || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex justify-between items-center gap-8 text-gray-600 border-t pt-2">
+                    <div data-testid="wht-row" className="flex justify-between items-center gap-8 text-gray-600 border-t pt-2">
                       <span className="whitespace-nowrap">Withholding Tax</span>
                       {isEditing ? (
                         <input
+                          data-testid="wht-input"
                           type="number"
                           min="0"
                           step="0.01"
@@ -1090,7 +1091,7 @@ export default function POS() {
                           onChange={(e) => setEditData({ ...editData, withholdingTax: e.target.value })}
                         />
                       ) : (
-                        <span className="font-mono text-red-600">
+                        <span data-testid="wht-display" className="font-mono text-red-600">
                           {Number(selectedInvoice.withholdingTax || 0) > 0 ? `-₱${Number(selectedInvoice.withholdingTax).toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00"}
                         </span>
                       )}
