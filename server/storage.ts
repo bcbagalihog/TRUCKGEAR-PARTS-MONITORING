@@ -2,6 +2,7 @@ import {
   products, productOemNumbers, productCompatibility,
   customers, vendors, salesOrders, salesOrderItems, purchaseOrders, purchaseOrderItems,
   inventoryTransactions, salesInvoices, salesInvoiceItems, drawerSessions, accountsPayable,
+  counterReceipts, counterReceiptChecks,
   type Product, type InsertProduct, type ProductWithDetails,
   type Customer, type InsertCustomer,
   type Vendor, type InsertVendor,
@@ -12,10 +13,12 @@ import {
   type SalesInvoiceItem, type InsertSalesInvoiceItem,
   type DrawerSession, type InsertDrawerSession,
   type AccountsPayable, type InsertAccountsPayable,
+  type CounterReceipt, type InsertCounterReceipt,
+  type CounterReceiptCheck, type InsertCounterReceiptCheck,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { db } from "./db";
-import { eq, desc, sql, ilike, or, inArray } from "drizzle-orm";
+import { eq, desc, sql, ilike, or, inArray, and } from "drizzle-orm";
 import { authStorage, type IAuthStorage } from "./replit_integrations/auth/storage";
 
 export interface IStorage extends IAuthStorage {
@@ -67,10 +70,16 @@ export interface IStorage extends IAuthStorage {
   getActivityReport(period: string): Promise<any>;
 
   // Accounts Payable
-  getAccountsPayable(): Promise<AccountsPayable[]>;
+  getAccountsPayable(vendorName?: string, status?: string): Promise<AccountsPayable[]>;
   createAccountsPayable(data: InsertAccountsPayable): Promise<AccountsPayable>;
   updateAccountsPayable(id: number, data: Partial<InsertAccountsPayable>): Promise<AccountsPayable>;
   receiveAccountsPayable(id: number, vendorDrNumber: string): Promise<AccountsPayable>;
+  bulkMarkCountered(ids: number[], counterReceiptId: number): Promise<void>;
+
+  // Counter Receipts
+  createCounterReceipt(data: InsertCounterReceipt, checks: InsertCounterReceiptCheck[]): Promise<CounterReceipt & { checks: CounterReceiptCheck[] }>;
+  getCounterReceipts(): Promise<(CounterReceipt & { checks: CounterReceiptCheck[] })[]>;
+  getCounterReceiptById(id: number): Promise<(CounterReceipt & { checks: CounterReceiptCheck[]; apInvoices: AccountsPayable[] }) | null>;
 
   // Admin Users
   getAllUsers(): Promise<any[]>;
@@ -448,8 +457,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   // --- ACCOUNTS PAYABLE ---
-  async getAccountsPayable(): Promise<AccountsPayable[]> {
-    return await db.select().from(accountsPayable).orderBy(desc(accountsPayable.createdAt));
+  async getAccountsPayable(vendorName?: string, status?: string): Promise<AccountsPayable[]> {
+    let query = db.select().from(accountsPayable).$dynamic();
+    const conditions = [];
+    if (vendorName) conditions.push(ilike(accountsPayable.vendorName, `%${vendorName}%`));
+    if (status) conditions.push(eq(accountsPayable.status, status));
+    if (conditions.length === 1) query = query.where(conditions[0]);
+    else if (conditions.length > 1) query = query.where(and(...conditions));
+    return await query.orderBy(desc(accountsPayable.createdAt));
   }
 
   async createAccountsPayable(data: InsertAccountsPayable): Promise<AccountsPayable> {
@@ -468,6 +483,46 @@ export class DatabaseStorage implements IStorage {
       .where(eq(accountsPayable.id, id))
       .returning();
     return bill;
+  }
+
+  async bulkMarkCountered(ids: number[], counterReceiptId: number): Promise<void> {
+    if (ids.length === 0) return;
+    await db.update(accountsPayable)
+      .set({ status: "COUNTERED", counterReceiptId })
+      .where(inArray(accountsPayable.id, ids));
+  }
+
+  // --- COUNTER RECEIPTS ---
+  async createCounterReceipt(
+    data: InsertCounterReceipt,
+    checks: InsertCounterReceiptCheck[]
+  ): Promise<CounterReceipt & { checks: CounterReceiptCheck[] }> {
+    const [receipt] = await db.insert(counterReceipts).values(data).returning();
+    const insertedChecks = checks.length > 0
+      ? await db.insert(counterReceiptChecks)
+          .values(checks.map(c => ({ ...c, counterReceiptId: receipt.id })))
+          .returning()
+      : [];
+    return { ...receipt, checks: insertedChecks };
+  }
+
+  async getCounterReceipts(): Promise<(CounterReceipt & { checks: CounterReceiptCheck[] })[]> {
+    const receipts = await db.select().from(counterReceipts).orderBy(desc(counterReceipts.createdAt));
+    const allChecks = await db.select().from(counterReceiptChecks);
+    return receipts.map(r => ({
+      ...r,
+      checks: allChecks.filter(c => c.counterReceiptId === r.id),
+    }));
+  }
+
+  async getCounterReceiptById(
+    id: number
+  ): Promise<(CounterReceipt & { checks: CounterReceiptCheck[]; apInvoices: AccountsPayable[] }) | null> {
+    const [receipt] = await db.select().from(counterReceipts).where(eq(counterReceipts.id, id));
+    if (!receipt) return null;
+    const checks = await db.select().from(counterReceiptChecks).where(eq(counterReceiptChecks.counterReceiptId, id));
+    const apInvoices = await db.select().from(accountsPayable).where(eq(accountsPayable.counterReceiptId, id));
+    return { ...receipt, checks, apInvoices };
   }
 
   // --- ADMIN USERS ---

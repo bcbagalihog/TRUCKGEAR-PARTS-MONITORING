@@ -162,11 +162,35 @@ export const accountsPayable = pgTable("accounts_payable", {
   invoiceNumber: text("invoice_number").notNull(),
   vendorName: text("vendor_name").notNull(),
   amountDue: numeric("amount_due").notNull().default("0"),
+  invoiceDate: date("invoice_date"),
   dueDate: date("due_date"),
-  status: text("status").notNull().default("UNPAID"),
+  status: text("status").notNull().default("PENDING_COUNTER"),
   vendorDrNumber: text("vendor_dr_number"),
+  counterReceiptId: integer("counter_receipt_id"),
   companyId: integer("company_id").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow(),
+});
+
+// === COUNTER RECEIPTS ===
+export const counterReceipts = pgTable("counter_receipts", {
+  id: serial("id").primaryKey(),
+  vendorName: text("vendor_name").notNull(),
+  receiptDate: date("receipt_date").notNull(),
+  refNo: text("ref_no"),
+  totalAmount: numeric("total_amount").notNull(),
+  numberOfChecks: integer("number_of_checks").notNull().default(1),
+  startDate: date("start_date"),
+  companyId: integer("company_id").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const counterReceiptChecks = pgTable("counter_receipt_checks", {
+  id: serial("id").primaryKey(),
+  counterReceiptId: integer("counter_receipt_id").notNull().references(() => counterReceipts.id),
+  checkNo: text("check_no"),
+  bank: text("bank"),
+  checkDate: date("check_date"),
+  amount: numeric("amount").notNull(),
 });
 
 // === SALES INVOICES (VAT OUTPUT) ===
@@ -355,3 +379,7 @@ export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
 export type AccountsPayable = typeof accountsPayable.$inferSelect;
 export type InsertAccountsPayable = typeof accountsPayable.$inferInsert;
+export type CounterReceipt = typeof counterReceipts.$inferSelect;
+export type InsertCounterReceipt = typeof counterReceipts.$inferInsert;
+export type CounterReceiptCheck = typeof counterReceiptChecks.$inferSelect;
+export type InsertCounterReceiptCheck = typeof counterReceiptChecks.$inferInsert;

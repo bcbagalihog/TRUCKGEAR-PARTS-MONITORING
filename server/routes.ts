@@ -282,13 +282,17 @@ export async function registerRoutes(
 
   // --- Accounts Payable ---
   app.get("/api/accounts-payable", isAuthenticated, async (req, res) => {
-    const bills = await storage.getAccountsPayable();
+    const { vendorName, status } = req.query as { vendorName?: string; status?: string };
+    const bills = await storage.getAccountsPayable(vendorName, status);
     res.json(bills);
   });
 
   app.post("/api/accounts-payable", isAuthenticated, async (req, res) => {
     try {
-      const bill = await storage.createAccountsPayable(req.body);
+      const bill = await storage.createAccountsPayable({
+        ...req.body,
+        status: req.body.status || "PENDING_COUNTER",
+      });
       res.status(201).json(bill);
     } catch (e) {
       console.error("accounts-payable create error:", e);
@@ -313,6 +317,48 @@ export async function registerRoutes(
     } catch (e) {
       console.error("accounts-payable receive error:", e);
       res.status(500).json({ message: "Failed to mark as received" });
+    }
+  });
+
+  // --- Counter Receipts ---
+  app.get("/api/counter-receipts", isAuthenticated, async (req, res) => {
+    try {
+      const receipts = await storage.getCounterReceipts();
+      res.json(receipts);
+    } catch (e) {
+      console.error("counter-receipts list error:", e);
+      res.status(500).json({ message: "Failed to fetch counter receipts" });
+    }
+  });
+
+  app.get("/api/counter-receipts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const receipt = await storage.getCounterReceiptById(Number(req.params.id));
+      if (!receipt) return res.status(404).json({ message: "Not found" });
+      res.json(receipt);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch counter receipt" });
+    }
+  });
+
+  app.post("/api/counter-receipts", isAuthenticated, async (req, res) => {
+    try {
+      const { receipt, checks, apInvoiceIds } = req.body as {
+        receipt: any;
+        checks: any[];
+        apInvoiceIds: number[];
+      };
+      const created = await storage.createCounterReceipt(
+        { ...receipt, companyId: 1 },
+        checks
+      );
+      if (apInvoiceIds && apInvoiceIds.length > 0) {
+        await storage.bulkMarkCountered(apInvoiceIds, created.id);
+      }
+      res.status(201).json(created);
+    } catch (e) {
+      console.error("counter-receipts create error:", e);
+      res.status(500).json({ message: "Failed to create counter receipt" });
     }
   });
 
