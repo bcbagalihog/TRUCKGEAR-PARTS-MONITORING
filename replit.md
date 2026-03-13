@@ -1,7 +1,11 @@
-# Auto Supply Inventory Management System
+# Truckgear Truck Parts Store — Inventory Management System
 
 ## Overview
-A professional inventory management system for an auto supply business. Includes inventory tracking with OEM cross-referencing, sales orders, purchase orders, customer/vendor management, and dashboard reporting.
+A professional inventory management system for Truckgear Truck Parts Store (auto supply business).
+- **Address**: 1032 A. Bonifacio St. Brgy Balingasa Q.C,
+- **Telephone**: (02)85513863 | **CP**: 09285066385
+
+Includes inventory tracking with OEM cross-referencing, sales orders, purchase orders, customer/vendor management, and dashboard reporting.
 
 ## Architecture
 - **Frontend**: React + Vite + Tailwind CSS + shadcn/ui components

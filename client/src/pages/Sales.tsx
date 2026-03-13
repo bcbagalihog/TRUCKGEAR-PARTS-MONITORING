@@ -110,7 +110,7 @@ function generateSalesOrderPDF(order: any, paperSize: PaperSize = "a4") {
 
   doc.setFontSize(headingSize);
   doc.setFont("helvetica", "bold");
-  doc.text("TruckGear Truck Parts Store", margin, y);
+  doc.text("Truckgear Truck Parts Store", margin, y);
   y += lineHeight;
 
   doc.setFontSize(smallSize);

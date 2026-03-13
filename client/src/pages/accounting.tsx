@@ -113,10 +113,11 @@ async function generateBillingPDF(customerName: string, lines: BillingLine[], do
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 15;
   try { doc.addImage(await loadImageDataUrl(logoPath), "PNG", margin, 10, 28, 28); } catch {}
-  doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.setTextColor(30, 58, 138);
-  doc.text("TRUCKGEAR.IO", 50, 18);
-  doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
-  doc.text("Auto Parts & Truck Supplies", 50, 24);
+  doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(30, 58, 138);
+  doc.text("Truckgear Truck Parts Store", 50, 18);
+  doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
+  doc.text("1032 A. Bonifacio St. Brgy Balingasa Q.C,", 50, 24);
+  doc.text("Tel: (02)85513863 | CP: 09285066385", 50, 29);
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(30, 30, 30);
   doc.text("BILLING COLLECTION", pageW - margin, 18, { align: "right" });
   doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
@@ -165,9 +166,10 @@ async function generateCounterReceiptPDF(
   const margin = 15;
   try { doc.addImage(await loadImageDataUrl(logoPath), "PNG", margin, 10, 24, 24); } catch {}
   doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(30, 58, 138);
-  doc.text("TRUCKGEAR.IO", 44, 18);
-  doc.setFontSize(8); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
-  doc.text("Auto Parts & Truck Supplies", 44, 24);
+  doc.text("Truckgear Truck Parts Store", 44, 18);
+  doc.setFontSize(7.5); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
+  doc.text("1032 A. Bonifacio St. Brgy Balingasa Q.C,", 44, 24);
+  doc.text("Tel: (02)85513863 | CP: 09285066385", 44, 29);
   doc.setFont("helvetica", "bold"); doc.setFontSize(18); doc.setTextColor(30, 30, 30);
   doc.text("SUPPLIER COUNTER RECEIPT", pageW - margin, 18, { align: "right" });
   doc.setFontSize(9); doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
@@ -1391,8 +1393,9 @@ export default function Accounting() {
                       {/* Top row: company + check no + date */}
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <p className="text-lg font-black text-blue-800 tracking-wider">TRUCKGEAR.IO</p>
-                          <p className="text-xs text-gray-500 font-medium">Auto Supply & Services</p>
+                          <p className="text-base font-black text-blue-800 tracking-wider">Truckgear Truck Parts Store</p>
+                          <p className="text-xs text-gray-500 font-medium">1032 A. Bonifacio St. Brgy Balingasa Q.C,</p>
+                          <p className="text-xs text-gray-500">Tel: (02)85513863 | CP: 09285066385</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Check No.</p>
@@ -1487,8 +1490,9 @@ export default function Accounting() {
               {/* Top: company + check no */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <div style={{ fontSize: "11pt", fontWeight: 900, letterSpacing: "1px", color: "#1a3c8f" }}>TRUCKGEAR.IO</div>
-                  <div style={{ fontSize: "7pt", color: "#555" }}>Auto Supply & Services</div>
+                  <div style={{ fontSize: "10pt", fontWeight: 900, letterSpacing: "0.5px", color: "#1a3c8f" }}>Truckgear Truck Parts Store</div>
+                  <div style={{ fontSize: "6.5pt", color: "#555" }}>1032 A. Bonifacio St. Brgy Balingasa Q.C,</div>
+                  <div style={{ fontSize: "6.5pt", color: "#555" }}>Tel: (02)85513863 | CP: 09285066385</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: "7pt", fontWeight: 700, color: "#555", textTransform: "uppercase" }}>Check No.</div>

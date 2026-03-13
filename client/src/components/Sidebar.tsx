@@ -94,8 +94,9 @@ export function Sidebar() {
             alt="TruckGear Logo"
             className="h-8 w-8 rounded-md object-cover transition-transform group-hover:scale-110"
           />
-          <h1 className="font-display text-2xl font-bold tracking-tight text-primary">
-            TRUCKGEAR<span className="text-yellow-400">.IO</span>
+          <h1 className="font-display font-bold tracking-tight text-primary leading-tight">
+            <span className="text-xl">Truckgear</span><br/>
+            <span className="text-xs font-semibold text-yellow-500 tracking-wide">Truck Parts Store</span>
           </h1>
         </a>
       </div>

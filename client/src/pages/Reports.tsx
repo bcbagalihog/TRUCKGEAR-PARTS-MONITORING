@@ -73,18 +73,27 @@ export default function Reports() {
     const margin = 14;
 
     // Header
-    doc.setFontSize(18);
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("TRUCKGEAR.IO", margin, 18);
-    doc.setFontSize(10);
+    doc.setTextColor(30, 58, 138);
+    doc.text("Truckgear Truck Parts Store", margin, 18);
+    doc.setFontSize(7.5);
     doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
+    doc.text("1032 A. Bonifacio St. Brgy Balingasa Q.C,", margin, 24);
+    doc.text("Tel: (02)85513863 | CP: 09285066385", margin, 29);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(30, 30, 30);
     doc.text("BUSINESS REPORT", pageW - margin, 18, { align: "right" });
     doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(80, 80, 80);
     doc.text(`Generated: ${new Date(bizReport.generatedAt).toLocaleString("en-PH")}`, pageW - margin, 24, { align: "right" });
     doc.setDrawColor(200, 200, 200);
-    doc.line(margin, 27, pageW - margin, 27);
+    doc.line(margin, 34, pageW - margin, 34);
 
-    let y = 33;
+    let y = 40;
 
     // Accounting Totals
     doc.setFontSize(11);

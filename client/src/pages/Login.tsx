@@ -79,10 +79,11 @@ export default function Login() {
       <div className="w-full max-w-md">
         <Card className="p-8">
           <div className="text-center mb-6">
-            <h1 className="font-display text-4xl font-bold text-primary mb-2">
-              TRUCKGEAR<span className="text-accent">.IO</span>
+            <h1 className="font-display text-3xl font-bold text-primary mb-1">
+              Truckgear <span className="text-accent">Truck Parts</span>
             </h1>
-            <p className="text-muted-foreground">Inventory Management System</p>
+            <p className="text-base font-semibold text-primary/70">Store</p>
+            <p className="text-sm text-muted-foreground mt-1">Inventory Management System</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
