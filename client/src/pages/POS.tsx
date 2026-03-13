@@ -1090,6 +1090,11 @@ export default function POS() {
               {vaultPrintInvoice.registeredName}
             </div>
 
+            {/* TIN */}
+            <div style={{ position: "absolute", top: "35mm", left: "40mm", width: "100mm", fontFamily: "monospace", whiteSpace: "nowrap", overflow: "hidden" }}>
+              {vaultPrintInvoice.tin}
+            </div>
+
             {/* BUSINESS ADDRESS */}
             <div style={{ position: "absolute", top: "41mm", left: "40mm", width: "100mm", fontFamily: "monospace", lineHeight: "5mm", whiteSpace: "nowrap", overflow: "hidden" }}>
               {vaultPrintInvoice.businessAddress}
@@ -1257,6 +1262,7 @@ export default function POS() {
               >
                 <div style={{ position: "absolute", top: "23mm", left: "115mm", fontFamily: "monospace" }}>{date}</div>
                 <div style={{ position: "absolute", top: "29mm", left: "40mm", width: "100mm", fontFamily: "monospace", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.name}</div>
+                <div style={{ position: "absolute", top: "35mm", left: "40mm", width: "100mm", fontFamily: "monospace", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.tin}</div>
                 <div style={{ position: "absolute", top: "41mm", left: "40mm", width: "100mm", fontFamily: "monospace", lineHeight: "5mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.address}</div>
                 {items.filter((i) => i.description.trim() !== "").map((item, index) => (
                   <div key={index} style={{ position: "absolute", top: `${62 + index * 6.8}mm`, left: "0", width: "148mm", fontFamily: "monospace" }}>
@@ -1302,6 +1308,11 @@ export default function POS() {
           {/* CUSTOMER NAME — top +5mm from previous */}
           <div style={{ position: "absolute", top: "29mm", left: "40mm", width: "100mm", fontFamily: "monospace", whiteSpace: "nowrap", overflow: "hidden" }}>
             {customer.name}
+          </div>
+
+          {/* TIN — between customer name and address; adjust top if needed */}
+          <div style={{ position: "absolute", top: "35mm", left: "40mm", width: "100mm", fontFamily: "monospace", whiteSpace: "nowrap", overflow: "hidden" }}>
+            {customer.tin}
           </div>
 
           {/* BUSINESS ADDRESS — top +5mm from previous */}
