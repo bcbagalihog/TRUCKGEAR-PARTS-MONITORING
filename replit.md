@@ -20,6 +20,8 @@ A professional inventory management system for an auto supply business. Includes
 - **Auth**: Custom username/password registration and login with bcrypt password hashing and session-based authentication
 - **Shopify Integration**: Connect to Shopify store to import/export products, view orders, compare inventory levels
 - **Product Images**: Upload product images with preview, stored in /uploads directory
+- **Accounting Module** (PIN: 8888): Three tabs — Accounts Payable (bill management with AI scan), Billing Collection (select customer invoices → generate PDF with logo/table/yellow total box), Counter Receipt (multiple check payments → PDF for supplier)
+- **PDF Generation**: jsPDF + jspdf-autotable; Billing Collection PDF has company logo, BILLING COLLECTION title, Date/Invoice/DR/PO/Amount table, yellow total box. Counter Receipt PDF has check details table and yellow total box.
 
 ## Project Structure
 ```
@@ -63,6 +65,9 @@ client/src/
 - `/api/stats/dashboard` (GET)
 - `/api/reports/activity?period=` (GET) - periods: daily, 7day, 30day, monthly, quarterly, yearly
 - `/api/auth/register` (POST), `/api/auth/login` (POST), `/api/auth/user` (GET), `/api/auth/logout` (POST)
+- `/api/sales-invoices` (GET) - list all VAT invoices (used by Billing Collection)
+- `/api/accounts-payable` (GET, POST), `/api/accounts-payable/:id` (PUT), `/api/accounts-payable/:id/receive` (POST)
+- `/api/admin/users` (GET, POST), `/api/admin/users/:id/toggle-status` (PATCH)
 
 ## Docker Deployment
 - **Dockerfile**: Multi-stage build (build stage + production stage), runs on port 8080 (configurable via PORT env var)

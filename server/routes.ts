@@ -348,6 +348,20 @@ export async function registerRoutes(
     }
   });
 
+  // --- Sales Invoices List (for Billing Collection) ---
+  app.get("/api/sales-invoices", isAuthenticated, async (req, res) => {
+    try {
+      const invoices = await db
+        .select()
+        .from(salesInvoices)
+        .orderBy(desc(salesInvoices.date));
+      res.json(invoices);
+    } catch (err) {
+      console.error("sales-invoices list error:", err);
+      res.status(500).json({ error: "Failed to fetch invoices" });
+    }
+  });
+
   // --- POS: VAT Invoices ---
   app.post("/api/vat-invoices", isAuthenticated, async (req, res) => {
     try {
