@@ -1,0 +1,38 @@
+bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ gcloud sql connect free-trial-first-project --user=postgres --database=truckgear
+Starting Cloud SQL Proxy: [/usr/bin/cloud-sql-proxy truckman-project:us-central1:free-trial-first-project --port 9470]
+2026/03/13 14:13:04 Authorizing with Application Default Credentials
+2026/03/13 14:13:04 [truckman-project:us-central1:free-trial-first-project] Listening on 127.0.0.1:9470
+2026/03/13 14:13:04 The proxy has started successfully and is ready for new connections!
+Connecting to database with SQL user [postgres].Password: 
+psql (16.13 (Ubuntu 16.13-1.pgdg24.04+1), server 18.2)
+WARNING: psql major version 16, server major version 18.
+         Some psql features might not work.
+Type "help" for help.
+
+truckgear=> 
+truckgear=> ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR DEFAULT 'staff';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT true;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "companyId" INTEGER DEFAULT 1;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "profileImageUrl" VARCHAR;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "firstName" VARCHAR;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "lastName" VARCHAR;
+\q
+NOTICE:  column "role" of relation "users" already exists, skipping
+ALTER TABLE
+NOTICE:  column "isActive" of relation "users" already exists, skipping
+ALTER TABLE
+NOTICE:  column "companyId" of relation "users" already exists, skipping
+ALTER TABLE
+NOTICE:  column "profileImageUrl" of relation "users" already exists, skipping
+ALTER TABLE
+NOTICE:  column "email" of relation "users" already exists, skipping
+ALTER TABLE
+NOTICE:  column "firstName" of relation "users" already exists, skipping
+ALTER TABLE
+NOTICE:  column "lastName" of relation "users" already exists, skipping
+ALTER TABLE
+bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ curl -X POST https://truckgear-parts-monitoring-1035094230417.europe-west1.run.app/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"TTPS","password":"Truckgear2026!","firstName":"BEN ANTHONY","lastName":"BAGALIHOG"}'
+{"message":"Registration failed"}bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ 
