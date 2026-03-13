@@ -188,6 +188,15 @@ export class DatabaseStorage implements IStorage {
     return c;
   }
 
+  async updateCustomer(id: number, data: Partial<InsertCustomer>): Promise<Customer> {
+    const [c] = await db.update(customers).set(data).where(eq(customers.id, id)).returning();
+    return c;
+  }
+
+  async deleteCustomer(id: number): Promise<void> {
+    await db.delete(customers).where(eq(customers.id, id));
+  }
+
   async getVendors(): Promise<Vendor[]> {
     return await db.select().from(vendors);
   }
@@ -200,6 +209,15 @@ export class DatabaseStorage implements IStorage {
   async createVendor(data: InsertVendor): Promise<Vendor> {
     const [v] = await db.insert(vendors).values(data).returning();
     return v;
+  }
+
+  async updateVendor(id: number, data: Partial<InsertVendor>): Promise<Vendor> {
+    const [v] = await db.update(vendors).set(data).where(eq(vendors.id, id)).returning();
+    return v;
+  }
+
+  async deleteVendor(id: number): Promise<void> {
+    await db.delete(vendors).where(eq(vendors.id, id));
   }
 
   // --- SALES ORDERS ---

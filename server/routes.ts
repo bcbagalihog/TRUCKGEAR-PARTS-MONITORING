@@ -123,6 +123,16 @@ export async function registerRoutes(
     res.status(201).json(customer);
   });
 
+  app.put("/api/customers/:id", async (req, res) => {
+    const customer = await storage.updateCustomer(Number(req.params.id), req.body);
+    res.json(customer);
+  });
+
+  app.delete("/api/customers/:id", async (req, res) => {
+    await storage.deleteCustomer(Number(req.params.id));
+    res.json({ success: true });
+  });
+
   // --- Vendors ---
   app.get(api.vendors.list.path, async (req, res) => {
     const vendors = await storage.getVendors();
@@ -132,6 +142,16 @@ export async function registerRoutes(
   app.post(api.vendors.create.path, async (req, res) => {
     const vendor = await storage.createVendor(req.body);
     res.status(201).json(vendor);
+  });
+
+  app.put("/api/vendors/:id", async (req, res) => {
+    const vendor = await storage.updateVendor(Number(req.params.id), req.body);
+    res.json(vendor);
+  });
+
+  app.delete("/api/vendors/:id", async (req, res) => {
+    await storage.deleteVendor(Number(req.params.id));
+    res.json({ success: true });
   });
 
   // --- Sales Orders ---
