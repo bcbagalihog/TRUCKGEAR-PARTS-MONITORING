@@ -50,7 +50,7 @@ export default function POS() {
     type: "CASH SALES",
   });
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(0);
-  const [items, setItems] = useState([{ description: "", qty: 1, price: 0 }]);
+  const [items, setItems] = useState<{ description: string; qty: number; price: number; productId?: number }[]>([{ description: "", qty: 1, price: 0 }]);
 
   // PAYMENT METHOD STATES
   type PayMethod = "CASH" | "GCASH" | "CHECK" | "NET_DAYS";
@@ -1280,6 +1280,78 @@ export default function POS() {
               >
                 Go Back
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* --- FIND PART MODAL --- */}
+        {isInventoryModalOpen && (
+          <div className="fixed inset-0 bg-black/60 z-[250] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[80vh]">
+              <div className="p-6 border-b flex items-center justify-between">
+                <h2 className="text-xl font-bold uppercase tracking-tight">Find Part / Product</h2>
+                <button onClick={() => { setIsInventoryModalOpen(false); setSearchTerm(""); }} className="text-gray-400 hover:text-gray-700">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="p-4 border-b">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    autoFocus
+                    type="text"
+                    className="w-full pl-9 pr-4 py-2 border rounded-lg font-bold uppercase text-sm outline-none"
+                    placeholder="Type product name or SKU..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="overflow-y-auto flex-1">
+                {searchTerm.length === 0 ? (
+                  <p className="text-center text-gray-400 py-12 text-sm">Start typing to search inventory</p>
+                ) : products.length === 0 ? (
+                  <p className="text-center text-gray-400 py-12 text-sm">No products found</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 border-b sticky top-0">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-bold text-gray-600 text-xs uppercase">Product</th>
+                        <th className="text-left px-4 py-3 font-bold text-gray-600 text-xs uppercase">SKU</th>
+                        <th className="text-right px-4 py-3 font-bold text-gray-600 text-xs uppercase">Stock</th>
+                        <th className="text-right px-4 py-3 font-bold text-gray-600 text-xs uppercase">Price</th>
+                        <th className="px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {products.map((p) => (
+                        <tr key={p.id} className="hover:bg-blue-50 cursor-pointer" onClick={() => {
+                          const lastItem = items[items.length - 1];
+                          const hasEmptyRow = lastItem && lastItem.description.trim() === "" && lastItem.qty === 1 && lastItem.price === 0;
+                          const newRow = { description: p.name.toUpperCase(), qty: 1, price: Number(p.sellingPrice), productId: p.id };
+                          if (hasEmptyRow) {
+                            const updated = [...items];
+                            updated[updated.length - 1] = newRow;
+                            setItems(updated);
+                          } else {
+                            setItems([...items, newRow]);
+                          }
+                          setIsInventoryModalOpen(false);
+                          setSearchTerm("");
+                        }}>
+                          <td className="px-4 py-3 font-bold text-gray-900">{p.name}</td>
+                          <td className="px-4 py-3 font-mono text-gray-500 text-xs">{p.sku}</td>
+                          <td className={`px-4 py-3 text-right font-bold ${p.stockQuantity <= (p.reorderPoint ?? 5) ? "text-red-600" : "text-green-700"}`}>{p.stockQuantity}</td>
+                          <td className="px-4 py-3 text-right font-mono font-bold">₱{Number(p.sellingPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-blue-600 font-bold text-xs uppercase">+ Add</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           </div>
         )}

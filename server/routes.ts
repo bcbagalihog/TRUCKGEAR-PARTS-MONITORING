@@ -15,6 +15,7 @@ import {
   salesInvoices, salesInvoiceItems, drawerSessions,
   accountsPayable, counterReceiptChecks, purchaseOrders,
   billingCollections, billingCollectionItems, billingCollectionPayments,
+  products, inventoryTransactions,
 } from "@shared/schema";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -851,6 +852,24 @@ export async function registerRoutes(
             amount: String((Number(item.qty ?? item.quantity ?? 1)) * Number(item.price ?? item.unitPrice ?? 0)),
           }))
         );
+
+        // Deduct stock for inventory items (those with a productId)
+        for (const item of items) {
+          const productId = item.productId;
+          if (!productId) continue;
+          const qty = Number(item.qty ?? item.quantity ?? 1);
+          await db
+            .update(products)
+            .set({ stockQuantity: sql`${products.stockQuantity} - ${qty}` })
+            .where(eq(products.id, productId));
+          await db.insert(inventoryTransactions).values({
+            productId,
+            quantity: -qty,
+            type: "sale",
+            referenceType: "pos_invoice",
+            referenceId: newInv.id,
+          });
+        }
       }
 
       res.json({ success: true, invoiceId: newInv.id, invoiceNumber: newInv.invoiceNumber });
