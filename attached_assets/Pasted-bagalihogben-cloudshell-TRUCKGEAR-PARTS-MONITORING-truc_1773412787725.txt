@@ -1,0 +1,67 @@
+bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ 
+Starting Cloud SQL Proxy: [/usr/bin/cloud-sql-proxy truckman-project:us-central1:free-trial-first-project --port 9470]
+2026/03/13 14:37:29 Authorizing with Application Default Credentials
+2026/03/13 14:37:29 [truckman-project:us-central1:free-trial-first-project] Listening on 127.0.0.1:9470
+2026/03/13 14:37:29 The proxy has started successfully and is ready for new connections!
+Connecting to database with SQL user [postgres].Password: 
+psql (16.13 (Ubuntu 16.13-1.pgdg24.04+1), server 18.2)
+WARNING: psql major version 16, server major version 18.
+         Some psql features might not work.
+Type "help" for help.
+
+truckgear=> 
+NOTICE:  relation "sales_invoices" already exists, skipping
+CREATE TABLE
+bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ 
+bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ 
+2026-03-13 14:38:58 Internal Server Error: error: column "tin" does not exist
+2026-03-13 14:38:58     at /app/node_modules/pg-pool/index.js:45:11
+2026-03-13 14:38:58     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-13 14:38:58     at async file:///app/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-03-13 14:38:58     at async DatabaseStorage.getVendors (file:///app/dist/index.js:701:12)
+2026-03-13 14:38:58     at async file:///app/dist/index.js:1633:22 {
+2026-03-13 14:38:58   length: 103,
+2026-03-13 14:38:58   severity: 'ERROR',
+2026-03-13 14:38:58   code: '42703',
+2026-03-13 14:38:58   detail: undefined,
+2026-03-13 14:38:58   hint: undefined,
+2026-03-13 14:38:58   position: '69',
+2026-03-13 14:38:58   internalPosition: undefined,
+2026-03-13 14:38:58   internalQuery: undefined,
+2026-03-13 14:38:58   where: undefined,
+2026-03-13 14:38:58   schema: undefined,
+2026-03-13 14:38:58   table: undefined,
+2026-03-13 14:38:58   column: undefined,
+2026-03-13 14:38:58   dataType: undefined,
+2026-03-13 14:38:58   constraint: undefined,
+2026-03-13 14:38:58   file: 'parse_relation.c',
+2026-03-13 14:38:58   line: '3827',
+2026-03-13 14:38:58   routine: 'errorMissingColumn'
+2026-03-13 14:38:58 }
+2026-03-13 14:38:58 2:38:58 PM [express] GET /api/vendors 500 in 1271ms :: {"message":"column \"tin\" does not exist"}
+2026-03-13 14:38:58 Internal Server Error: error: column "tin" does not exist
+2026-03-13 14:38:58     at /app/node_modules/pg-pool/index.js:45:11
+2026-03-13 14:38:58     at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2026-03-13 14:38:58     at async file:///app/node_modules/drizzle-orm/node-postgres/session.js:83:22
+2026-03-13 14:38:58     at async DatabaseStorage.getCustomers (file:///app/dist/index.js:683:12)
+2026-03-13 14:38:58     at async file:///app/dist/index.js:1617:24 {
+2026-03-13 14:38:58   length: 103,
+2026-03-13 14:38:58   severity: 'ERROR',
+2026-03-13 14:38:58   code: '42703',
+2026-03-13 14:38:58   detail: undefined,
+2026-03-13 14:38:58   hint: undefined,
+2026-03-13 14:38:58   position: '51',
+2026-03-13 14:38:58   internalPosition: undefined,
+2026-03-13 14:38:58   internalQuery: undefined,
+2026-03-13 14:38:58   where: undefined,
+2026-03-13 14:38:58   schema: undefined,
+2026-03-13 14:38:58   table: undefined,
+2026-03-13 14:38:58   column: undefined,
+2026-03-13 14:38:58   dataType: undefined,
+2026-03-13 14:38:58   constraint: undefined,
+2026-03-13 14:38:58   file: 'parse_relation.c',
+2026-03-13 14:38:58   line: '3827',
+2026-03-13 14:38:58   routine: 'errorMissingColumn'
+2026-03-13 14:38:58 }
+2026-03-13 14:38:59 2:38:59 PM [express] GET /api/customers 500 in 1732ms :: {"message":"column \"tin\" does not exist"}
+bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ 
