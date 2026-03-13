@@ -66,6 +66,28 @@ interface CheckLine {
   amount: string;
 }
 
+// ─── Amount to Words (Philippine format) ──────────────────────────────────────
+function amountToWords(num: number): string {
+  if (!num || num === 0) return "ZERO PESOS ONLY";
+  const ones = ["", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE",
+    "TEN", "ELEVEN", "TWELVE", "THIRTEEN", "FOURTEEN", "FIFTEEN", "SIXTEEN", "SEVENTEEN", "EIGHTEEN", "NINETEEN"];
+  const tens = ["", "", "TWENTY", "THIRTY", "FORTY", "FIFTY", "SIXTY", "SEVENTY", "EIGHTY", "NINETY"];
+  function words(n: number): string {
+    if (n === 0) return "";
+    if (n < 20) return ones[n] + " ";
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + ones[n % 10] : "") + " ";
+    if (n < 1000) return ones[Math.floor(n / 100)] + " HUNDRED " + words(n % 100);
+    if (n < 1_000_000) return words(Math.floor(n / 1000)) + "THOUSAND " + words(n % 1000);
+    if (n < 1_000_000_000) return words(Math.floor(n / 1_000_000)) + "MILLION " + words(n % 1_000_000);
+    return words(Math.floor(n / 1_000_000_000)) + "BILLION " + words(n % 1_000_000_000);
+  }
+  const pesos = Math.floor(num);
+  const centavos = Math.round((num - pesos) * 100);
+  let result = words(pesos).trim() + " PESOS";
+  if (centavos > 0) result += ` AND ${centavos.toString().padStart(2, "0")}/100`;
+  return result + " ONLY";
+}
+
 // ─── PDF Helpers ──────────────────────────────────────────────────────────────
 
 async function loadImageDataUrl(src: string): Promise<string> {
@@ -277,6 +299,7 @@ export default function Accounting() {
   const [editingReceipt, setEditingReceipt] = useState<any | null>(null);
   const [editingReceiptChecks, setEditingReceiptChecks] = useState<any[]>([]);
   const [deletingReceipt, setDeletingReceipt] = useState<any | null>(null);
+  const [printCheckData, setPrintCheckData] = useState<{ check: CheckLine; payee: string } | null>(null);
   const [isDeletingReceipt, setIsDeletingReceipt] = useState(false);
   const [isSavingReceiptEdit, setIsSavingReceiptEdit] = useState(false);
 
@@ -1024,6 +1047,7 @@ export default function Accounting() {
                   <th className="px-4 py-3">Bank</th>
                   <th className="px-4 py-3">Check Date</th>
                   <th className="px-4 py-3 text-right">Amount (₱)</th>
+                  <th className="px-4 py-3 text-center w-16">Print</th>
                   <th className="px-4 py-3 w-10"></th>
                 </tr>
               </thead>
@@ -1056,6 +1080,16 @@ export default function Accounting() {
                         onChange={(e) => setChecks((p) => p.map((c, i) => i === idx ? { ...c, amount: e.target.value } : c))} />
                     </td>
                     <td className="px-4 py-2 text-center">
+                      <button
+                        onClick={() => setPrintCheckData({ check: chk, payee: crVendor || "Payee" })}
+                        data-testid={`print-check-${idx}`}
+                        title="Print Check"
+                        className="p-1.5 rounded-md text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                    </td>
+                    <td className="px-4 py-2 text-center">
                       {checks.length > 1 && (
                         <button onClick={() => setChecks((p) => p.filter((_, i) => i !== idx))}
                           className="p-1 text-gray-400 hover:text-red-500" data-testid={`remove-check-${idx}`}>
@@ -1072,6 +1106,7 @@ export default function Accounting() {
                   <td className="px-4 py-3 text-right font-bold text-yellow-900">
                     ₱{checks.reduce((s, c) => s + Number(c.amount || 0), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                   </td>
+                  <td></td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -1306,6 +1341,209 @@ export default function Accounting() {
           </div>
         </div>
       )}
+
+      {/* ── CHECK PRINTER MODAL ── */}
+      {printCheckData && (() => {
+        const { check, payee } = printCheckData;
+        const amount = Number(check.amount || 0);
+        const amountWords = amountToWords(amount);
+        const formattedDate = check.date
+          ? new Date(check.date + "T00:00:00").toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })
+          : "";
+        const formattedAmount = amount.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        const doPrint = () => {
+          document.body.classList.add("check-printing");
+          window.print();
+          setTimeout(() => document.body.classList.remove("check-printing"), 1500);
+        };
+
+        return (
+          <>
+            {/* Screen preview modal */}
+            <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden">
+                {/* Modal header */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
+                      <Printer className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-gray-900">Check Printer Preview</h2>
+                      <p className="text-xs text-gray-500">Review the check before printing</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setPrintCheckData(null)} className="p-2 rounded-lg hover:bg-gray-200 text-gray-500">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Check preview card */}
+                <div className="p-6">
+                  {/* The check visual */}
+                  <div className="relative border-2 border-gray-300 rounded-lg overflow-hidden shadow-lg"
+                    style={{ background: "linear-gradient(135deg, #f0f7ff 0%, #e8f4e8 50%, #f0f7ff 100%)", minHeight: "200px" }}>
+                    {/* Subtle watermark lines */}
+                    <div className="absolute inset-0 opacity-5" style={{ backgroundImage: "repeating-linear-gradient(45deg, #1a56db 0px, #1a56db 1px, transparent 1px, transparent 20px)" }} />
+
+                    <div className="relative p-6">
+                      {/* Top row: company + check no + date */}
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <p className="text-lg font-black text-blue-800 tracking-wider">TRUCKGEAR.IO</p>
+                          <p className="text-xs text-gray-500 font-medium">Auto Supply & Services</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-1">Check No.</p>
+                          <p className="text-sm font-mono font-bold text-gray-800 border-b border-gray-400 pb-0.5 min-w-[120px] text-right">
+                            {check.checkNo || "___________"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Date row */}
+                      <div className="flex justify-end mb-5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-gray-600 uppercase">Date:</span>
+                          <span className="text-sm font-semibold text-gray-800 border-b border-gray-400 pb-0.5 min-w-[180px] text-right">
+                            {formattedDate || "_______________"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Pay to row */}
+                      <div className="flex items-end gap-3 mb-4">
+                        <span className="text-xs font-bold text-gray-600 uppercase whitespace-nowrap">Pay to the Order of:</span>
+                        <div className="flex-1 border-b-2 border-gray-500 pb-0.5">
+                          <p className="text-sm font-bold text-gray-900">{payee || "___________________________"}</p>
+                        </div>
+                        <div className="flex items-center gap-1 border-2 border-gray-500 rounded px-3 py-1 bg-white/60 min-w-[140px]">
+                          <span className="text-sm font-bold text-gray-700">₱</span>
+                          <span className="text-sm font-mono font-bold text-gray-900 text-right flex-1">{formattedAmount}</span>
+                        </div>
+                      </div>
+
+                      {/* Amount in words */}
+                      <div className="mb-5">
+                        <div className="border-b-2 border-gray-500 pb-0.5">
+                          <p className="text-xs font-bold text-gray-900 tracking-wide uppercase">{amountWords}</p>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">Amount in words</p>
+                      </div>
+
+                      {/* Bottom row: bank + signature */}
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-gray-500 uppercase mb-1">Bank</p>
+                          <p className="text-sm font-semibold text-gray-800 border-b border-gray-400 pb-0.5 min-w-[160px]">
+                            {check.bank || "_______________"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <div className="border-t-2 border-gray-600 mt-8 pt-1 min-w-[180px]">
+                            <p className="text-xs text-gray-500 font-semibold uppercase">Authorized Signature</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fields summary */}
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Amount in Words</p>
+                      <p className="text-xs font-bold text-gray-800 leading-relaxed">{amountWords}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Print Instructions</p>
+                      <p className="text-xs text-gray-600">Load check paper in printer. Click <strong>Print Check</strong> below. Printer will output to the check at 190×83mm.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer buttons */}
+                <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+                  <button onClick={() => setPrintCheckData(null)}
+                    className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-100">
+                    Close
+                  </button>
+                  <button onClick={doPrint}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-200">
+                    <Printer className="h-4 w-4" />
+                    Print Check
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Hidden check print area — rendered into DOM for browser print */}
+            <div id="check-print-area" style={{
+              width: "190mm", height: "83mm", padding: "5mm 8mm",
+              fontFamily: "'Arial', sans-serif", fontSize: "9pt",
+              background: "transparent", boxSizing: "border-box",
+              display: "flex", flexDirection: "column", justifyContent: "space-between",
+            }}>
+              {/* Top: company + check no */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: "11pt", fontWeight: 900, letterSpacing: "1px", color: "#1a3c8f" }}>TRUCKGEAR.IO</div>
+                  <div style={{ fontSize: "7pt", color: "#555" }}>Auto Supply & Services</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: "7pt", fontWeight: 700, color: "#555", textTransform: "uppercase" }}>Check No.</div>
+                  <div style={{ fontSize: "9pt", fontFamily: "monospace", fontWeight: 700, borderBottom: "1px solid #333", paddingBottom: "1px", minWidth: "90px", textAlign: "right" }}>
+                    {check.checkNo || ""}
+                  </div>
+                </div>
+              </div>
+
+              {/* Date */}
+              <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "7pt", fontWeight: 700, textTransform: "uppercase", color: "#444" }}>Date:</span>
+                <span style={{ fontSize: "9pt", fontWeight: 600, borderBottom: "1px solid #333", paddingBottom: "1px", minWidth: "140px", textAlign: "right" }}>
+                  {formattedDate}
+                </span>
+              </div>
+
+              {/* Pay to + Amount box */}
+              <div style={{ display: "flex", alignItems: "flex-end", gap: "8px" }}>
+                <span style={{ fontSize: "7pt", fontWeight: 700, textTransform: "uppercase", color: "#444", whiteSpace: "nowrap" }}>Pay to the Order of:</span>
+                <div style={{ flex: 1, borderBottom: "1.5px solid #222", paddingBottom: "1px" }}>
+                  <span style={{ fontSize: "9pt", fontWeight: 700 }}>{payee}</span>
+                </div>
+                <div style={{ border: "1.5px solid #222", borderRadius: "3px", padding: "1px 6px", minWidth: "110px", display: "flex", alignItems: "center", gap: "3px", background: "rgba(255,255,255,0.5)" }}>
+                  <span style={{ fontSize: "9pt", fontWeight: 700 }}>₱</span>
+                  <span style={{ fontSize: "9pt", fontFamily: "monospace", fontWeight: 700, flex: 1, textAlign: "right" }}>{formattedAmount}</span>
+                </div>
+              </div>
+
+              {/* Amount in words */}
+              <div>
+                <div style={{ borderBottom: "1.5px solid #222", paddingBottom: "1px" }}>
+                  <span style={{ fontSize: "8pt", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3px" }}>{amountWords}</span>
+                </div>
+                <div style={{ fontSize: "6.5pt", color: "#888", marginTop: "1px" }}>Amount in words</div>
+              </div>
+
+              {/* Bank + Signature */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                <div>
+                  <div style={{ fontSize: "7pt", fontWeight: 700, color: "#555", textTransform: "uppercase", marginBottom: "2px" }}>Bank</div>
+                  <div style={{ fontSize: "9pt", fontWeight: 600, borderBottom: "1px solid #333", paddingBottom: "1px", minWidth: "130px" }}>
+                    {check.bank || ""}
+                  </div>
+                </div>
+                <div style={{ textAlign: "center", minWidth: "160px" }}>
+                  <div style={{ borderTop: "1.5px solid #333", paddingTop: "3px" }}>
+                    <div style={{ fontSize: "7pt", fontWeight: 700, color: "#555", textTransform: "uppercase" }}>Authorized Signature</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── VIEW COUNTER RECEIPT MODAL ── */}
       {viewingReceipt && (

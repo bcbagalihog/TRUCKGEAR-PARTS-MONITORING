@@ -219,4 +219,32 @@
     visibility: hidden !important;
     display: none !important;
   }
+
+  /* ── CHECK PRINTER ─────────────────────────────────────────────────────── */
+  body.check-printing {
+    background: white !important;
+  }
+
+  /* Hide everything when check-printing */
+  body.check-printing * {
+    visibility: hidden !important;
+  }
+
+  /* Show only the check print area */
+  body.check-printing #check-print-area,
+  body.check-printing #check-print-area * {
+    visibility: visible !important;
+  }
+
+  body.check-printing #check-print-area {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 190mm !important;
+    height: 83mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    z-index: 99999 !important;
+  }
 }
