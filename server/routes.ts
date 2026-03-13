@@ -1,73 +1,283 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import {
-  setupAuth,
-  registerAuthRoutes,
-  isAuthenticated,
-} from "./replit_integrations/auth";
-import express from "express";
+import { api } from "@shared/routes";
+import { z } from "zod";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import multer from "multer";
 import path from "path";
+import express from "express";
+import fs from "fs";
+import Shopify from "shopify-api-node";
 import { db } from "./db";
 import { eq, and, desc } from "drizzle-orm";
-import {
-  salesInvoices,
-  salesInvoiceItems,
-  drawerSessions,
-} from "@shared/schema";
+import { salesInvoices, salesInvoiceItems, drawerSessions } from "@shared/schema";
+
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: uploadsDir,
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      const ext = path.extname(file.originalname);
+      cb(null, `product-${uniqueSuffix}${ext}`);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /\.(jpg|jpeg|png|gif|webp)$/i;
+    if (allowed.test(path.extname(file.originalname))) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"));
+    }
+  },
+});
 
 export async function registerRoutes(
   httpServer: Server,
-  app: Express,
+  app: Express
 ): Promise<Server> {
   await setupAuth(app);
   registerAuthRoutes(app);
 
-  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+  app.use("/uploads", express.static(uploadsDir));
 
-  // --- DRAWER STATUS (SYNCED FOR V3) ---
+  // --- Image Upload ---
+  app.post("/api/upload", upload.single("image"), (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image file provided" });
+    }
+    const allowedMimes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    if (!allowedMimes.includes(req.file.mimetype)) {
+      fs.unlinkSync(req.file.path);
+      return res.status(400).json({ message: "Only image files (JPG, PNG, GIF, WEBP) are allowed" });
+    }
+    res.json({ imageUrl: `/uploads/${req.file.filename}` });
+  });
+
+  // --- Products ---
+  app.get(api.products.list.path, async (req, res) => {
+    const products = await storage.getProducts(req.query.search as string);
+    res.json(products);
+  });
+
+  app.get(api.products.get.path, async (req, res) => {
+    const product = await storage.getProduct(Number(req.params.id));
+    if (!product) return res.status(404).json({ message: "Product not found" });
+    res.json(product);
+  });
+
+  app.post(api.products.create.path, async (req, res) => {
+    try {
+      const { oemNumbers, compatibility, ...productData } = api.products.create.input.parse(req.body);
+      const product = await storage.createProduct(productData, oemNumbers, compatibility);
+      res.status(201).json(product);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json(e.errors);
+      throw e;
+    }
+  });
+
+  app.put(api.products.update.path, async (req, res) => {
+    try {
+      const { oemNumbers, compatibility, ...productData } = api.products.update.input.parse(req.body);
+      const product = await storage.updateProduct(Number(req.params.id), productData, oemNumbers, compatibility);
+      res.json(product);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json(e.errors);
+      throw e;
+    }
+  });
+
+  app.delete(api.products.delete.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const product = await storage.getProduct(id);
+      if (!product) return res.status(404).json({ message: "Product not found" });
+      await storage.deleteProduct(id);
+      res.json({ message: "Product deleted" });
+    } catch (e: any) {
+      if (e.code === '23503') {
+        return res.status(400).json({ message: "Cannot delete product that is used in existing orders." });
+      }
+      throw e;
+    }
+  });
+
+  // --- Customers ---
+  app.get(api.customers.list.path, async (req, res) => {
+    const customers = await storage.getCustomers();
+    res.json(customers);
+  });
+
+  app.post(api.customers.create.path, async (req, res) => {
+    const customer = await storage.createCustomer(req.body);
+    res.status(201).json(customer);
+  });
+
+  // --- Vendors ---
+  app.get(api.vendors.list.path, async (req, res) => {
+    const vendors = await storage.getVendors();
+    res.json(vendors);
+  });
+
+  app.post(api.vendors.create.path, async (req, res) => {
+    const vendor = await storage.createVendor(req.body);
+    res.status(201).json(vendor);
+  });
+
+  // --- Sales Orders ---
+  app.get(api.salesOrders.list.path, async (req, res) => {
+    const orders = await storage.getSalesOrders();
+    res.json(orders);
+  });
+
+  app.get(api.salesOrders.get.path, async (req, res) => {
+    const order = await storage.getSalesOrder(Number(req.params.id));
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    res.json(order);
+  });
+
+  app.post(api.salesOrders.create.path, async (req, res) => {
+    const { items, ...orderData } = api.salesOrders.create.input.parse(req.body);
+    const order = await storage.createSalesOrder(orderData, items);
+    res.status(201).json(order);
+  });
+
+  app.patch(api.salesOrders.updateStatus.path, async (req, res) => {
+    const { status } = req.body;
+    const order = await storage.updateSalesOrderStatus(Number(req.params.id), status);
+    res.json(order);
+  });
+
+  app.put(api.salesOrders.update.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getSalesOrder(id);
+      if (!existing) return res.status(404).json({ message: "Order not found" });
+      if (existing.status === 'invoiced') return res.status(400).json({ message: "Cannot edit an invoiced order" });
+      const { items, ...orderData } = api.salesOrders.update.input.parse(req.body);
+      const order = await storage.updateSalesOrder(id, orderData, items);
+      res.json(order);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json(e.errors);
+      throw e;
+    }
+  });
+
+  app.delete(api.salesOrders.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = await storage.getSalesOrder(id);
+    if (!existing) return res.status(404).json({ message: "Order not found" });
+    if (existing.status === 'invoiced') return res.status(400).json({ message: "Cannot delete an invoiced order" });
+    await storage.deleteSalesOrder(id);
+    res.json({ message: "Order deleted" });
+  });
+
+  // --- Purchase Orders ---
+  app.get(api.purchaseOrders.list.path, async (req, res) => {
+    const orders = await storage.getPurchaseOrders();
+    res.json(orders);
+  });
+
+  app.get(api.purchaseOrders.get.path, async (req, res) => {
+    const order = await storage.getPurchaseOrder(Number(req.params.id));
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    res.json(order);
+  });
+
+  app.post(api.purchaseOrders.create.path, async (req, res) => {
+    const { items, ...orderData } = api.purchaseOrders.create.input.parse(req.body);
+    const order = await storage.createPurchaseOrder(orderData, items);
+    res.status(201).json(order);
+  });
+
+  app.patch(api.purchaseOrders.updateStatus.path, async (req, res) => {
+    const { status } = req.body;
+    const order = await storage.updatePurchaseOrderStatus(Number(req.params.id), status);
+    res.json(order);
+  });
+
+  app.put(api.purchaseOrders.update.path, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const existing = await storage.getPurchaseOrder(id);
+      if (!existing) return res.status(404).json({ message: "Order not found" });
+      if (existing.status === 'received') return res.status(400).json({ message: "Cannot edit a received order" });
+      const { items, ...orderData } = api.purchaseOrders.update.input.parse(req.body);
+      const order = await storage.updatePurchaseOrder(id, orderData, items);
+      res.json(order);
+    } catch (e) {
+      if (e instanceof z.ZodError) return res.status(400).json(e.errors);
+      throw e;
+    }
+  });
+
+  app.delete(api.purchaseOrders.delete.path, async (req, res) => {
+    const id = Number(req.params.id);
+    const existing = await storage.getPurchaseOrder(id);
+    if (!existing) return res.status(404).json({ message: "Order not found" });
+    if (existing.status === 'received') return res.status(400).json({ message: "Cannot delete a received order" });
+    await storage.deletePurchaseOrder(id);
+    res.json({ message: "Order deleted" });
+  });
+
+  // --- Stats & Reports ---
+  app.get(api.stats.dashboard.path, async (req, res) => {
+    const stats = await storage.getDashboardStats();
+    res.json(stats);
+  });
+
+  app.get("/api/reports/activity", async (req, res) => {
+    const period = (req.query.period as string) || 'daily';
+    const report = await storage.getActivityReport(period);
+    res.json(report);
+  });
+
+  // --- POS: Drawer Management ---
   app.get("/api/pos/drawer-status", isAuthenticated, async (req, res) => {
     try {
-      const [session] = await db
-        .select()
-        .from(drawerSessions)
-        .where(
-          and(
-            eq(drawerSessions.userId, req.user!.id),
-            eq(drawerSessions.status, "OPEN"),
-          ),
-        )
-        .orderBy(desc(drawerSessions.startTime))
-        .limit(1);
+      const session = await storage.getActiveDrawerSession(req.user!.id);
       res.json({ active: !!session, session: session || null });
     } catch (e) {
+      console.error("drawer-status error:", e);
       res.status(500).json({ active: false });
     }
   });
 
   app.post("/api/pos/drawer-open", isAuthenticated, async (req, res) => {
     try {
-      const [newSession] = await db
-        .insert(drawerSessions)
-        .values({
-          userId: req.user!.id,
-          openingBalance: req.body.openingBalance.toString(),
-          status: "OPEN",
-          companyId: 1,
-        })
-        .returning();
-      res.json(newSession);
+      const session = await storage.createDrawerSession({
+        userId: req.user!.id,
+        openingBalance: String(req.body.openingBalance ?? 0),
+        status: "OPEN",
+        companyId: 1,
+      });
+      res.json(session);
     } catch (e) {
-      res.status(500).json({ message: "Failed" });
+      console.error("drawer-open error:", e);
+      res.status(500).json({ message: "Failed to open drawer" });
     }
   });
 
-  app.get("/api/products", isAuthenticated, async (req, res) => {
-    const products = await storage.getProducts(req.query.search as string);
-    res.json(products);
+  app.post("/api/pos/drawer-close", isAuthenticated, async (req, res) => {
+    try {
+      const session = await storage.getActiveDrawerSession(req.user!.id);
+      if (!session) return res.status(404).json({ message: "No active drawer session" });
+      await storage.closeDrawerSession(session.id, String(req.body.closingBalance ?? 0));
+      res.json({ message: "Drawer closed" });
+    } catch (e) {
+      console.error("drawer-close error:", e);
+      res.status(500).json({ message: "Failed to close drawer" });
+    }
   });
 
-  // --- FINALIZE INVOICE (SUPPORTS GCASH/BANK) ---
+  // --- POS: VAT Invoices ---
   app.post("/api/vat-invoices", isAuthenticated, async (req, res) => {
     try {
       const { invoice, items } = req.body;
@@ -75,26 +285,159 @@ export async function registerRoutes(
         .insert(salesInvoices)
         .values({
           invoiceNumber: invoice.invoiceNo,
-          registeredName: invoice.customer.name,
-          tin: invoice.customer.tin || "",
-          totalAmountDue: invoice.totalAmountDue.toString(),
-          drawerSessionId: invoice.drawerSessionId,
-          paymentMethod: invoice.paymentMethod || "CASH", // Supports GCASH/BANK
+          registeredName: invoice.customer?.name || "Walk-in Customer",
+          tin: invoice.customer?.tin || "",
+          "totalAmount_Due": String(invoice.totalAmountDue ?? invoice.totalAmount_Due ?? 0),
+          drawerSessionId: invoice.drawerSessionId || null,
+          paymentMethod: invoice.paymentMethod || "CASH",
           companyId: 1,
         })
         .returning();
 
-      const itemsToInsert = items.map((item: any) => ({
-        salesInvoiceId: newInv.id,
-        itemDescription: item.description,
-        quantity: item.qty,
-        unitPrice: item.price.toString(),
-        amount: (item.qty * item.price).toString(),
-      }));
-      await db.insert(salesInvoiceItems).values(itemsToInsert);
-      res.json({ success: true, invoiceId: newInv.id });
+      if (items && items.length > 0) {
+        await db.insert(salesInvoiceItems).values(
+          items.map((item: any) => ({
+            salesInvoiceId: newInv.id,
+            itemDescription: item.description || item.name,
+            quantity: Number(item.qty ?? item.quantity ?? 1),
+            unitPrice: String(item.price ?? item.unitPrice ?? 0),
+            amount: String((Number(item.qty ?? item.quantity ?? 1)) * Number(item.price ?? item.unitPrice ?? 0)),
+          }))
+        );
+      }
+
+      res.json({ success: true, invoiceId: newInv.id, invoiceNumber: newInv.invoiceNumber });
     } catch (err) {
-      res.status(500).json({ error: "Failed" });
+      console.error("vat-invoices error:", err);
+      res.status(500).json({ error: "Failed to create invoice" });
+    }
+  });
+
+  // --- Shopify Integration ---
+  function getShopifyClient(): Shopify | null {
+    const storeUrl = process.env.SHOPIFY_STORE_URL;
+    const apiKey = process.env.SHOPIFY_API_KEY;
+    if (!storeUrl || !apiKey) return null;
+    return new Shopify({
+      shopName: storeUrl.replace('.myshopify.com', ''),
+      accessToken: apiKey,
+      apiVersion: '2024-01',
+      autoLimit: true,
+    });
+  }
+
+  app.get("/api/shopify/status", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.json({ connected: false, message: "Shopify credentials not configured" });
+    try {
+      const shop = await shopify.shop.get();
+      res.json({ connected: true, shop: { name: shop.name, domain: shop.domain, email: shop.email, currency: shop.currency, plan: shop.plan_name } });
+    } catch (e: any) {
+      res.json({ connected: false, message: e.message || "Failed to connect to Shopify" });
+    }
+  });
+
+  app.get("/api/shopify/products", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const products = await shopify.product.list({ limit: 250 });
+      res.json(products);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to fetch Shopify products" });
+    }
+  });
+
+  app.post("/api/shopify/import-products", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const shopifyProducts = await shopify.product.list({ limit: 250 });
+      let imported = 0, skipped = 0;
+      const errors: string[] = [];
+      for (const sp of shopifyProducts) {
+        const variant = sp.variants?.[0];
+        const sku = variant?.sku || `SHOPIFY-${sp.id}`;
+        try {
+          const existing = await storage.getProductBySku(sku);
+          if (existing) { skipped++; continue; }
+          await storage.createProduct({
+            sku, name: sp.title,
+            category: sp.product_type || "Imported",
+            brand: sp.vendor || null,
+            costPrice: String(variant?.compare_at_price || variant?.price || "0"),
+            sellingPrice: String(variant?.price || "0"),
+            stockQuantity: variant?.inventory_quantity ?? 0,
+            reorderPoint: 5,
+            imageUrl: sp.image?.src || null,
+          }, [], []);
+          imported++;
+        } catch (e: any) {
+          errors.push(`${sp.title}: ${e.message}`);
+        }
+      }
+      res.json({ imported, skipped, errors, total: shopifyProducts.length });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to import products" });
+    }
+  });
+
+  app.post("/api/shopify/export-products", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const localProducts = await storage.getProducts();
+      let exported = 0, skipped = 0;
+      const errors: string[] = [];
+      for (const lp of localProducts) {
+        try {
+          const existing = await shopify.product.list({ limit: 1, title: lp.name });
+          if (existing.length > 0) { skipped++; continue; }
+          await shopify.product.create({
+            title: lp.name, product_type: lp.category, vendor: lp.brand || undefined,
+            variants: [{ sku: lp.sku, price: String(lp.sellingPrice), compare_at_price: String(lp.costPrice), inventory_management: "shopify", inventory_quantity: lp.stockQuantity }],
+          });
+          exported++;
+        } catch (e: any) {
+          errors.push(`${lp.name}: ${e.message}`);
+        }
+      }
+      res.json({ exported, skipped, errors, total: localProducts.length });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to export products" });
+    }
+  });
+
+  app.post("/api/shopify/sync-inventory", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const shopifyProducts = await shopify.product.list({ limit: 250 });
+      const localProducts = await storage.getProducts();
+      let synced = 0;
+      const details: any[] = [];
+      for (const sp of shopifyProducts) {
+        const variant = sp.variants?.[0];
+        if (!variant?.sku) continue;
+        const local = localProducts.find((p: any) => p.sku === variant.sku);
+        if (!local) continue;
+        details.push({ sku: variant.sku, name: sp.title, shopifyQty: variant.inventory_quantity ?? 0, localQty: local.stockQuantity, status: (variant.inventory_quantity ?? 0) === local.stockQuantity ? "in_sync" : "out_of_sync" });
+        synced++;
+      }
+      res.json({ synced, details });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to sync inventory" });
+    }
+  });
+
+  app.get("/api/shopify/orders", isAuthenticated, async (req, res) => {
+    const shopify = getShopifyClient();
+    if (!shopify) return res.status(400).json({ message: "Shopify not configured" });
+    try {
+      const orders = await shopify.order.list({ limit: 50, status: "any" });
+      res.json(orders);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message || "Failed to fetch Shopify orders" });
     }
   });
 
