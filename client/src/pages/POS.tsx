@@ -1144,19 +1144,46 @@ export default function POS() {
               </div>
             ))}
 
-            {/* TOTAL SALES (VATable) */}
+            {/* RIGHT: Total Sales (VATable) */}
             <div style={{ position: "absolute", top: "126mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>
               {Number(vaultPrintInvoice.vatableSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
 
-            {/* VAT AMOUNT (12%) */}
+            {/* RIGHT: VAT Amount (12%) */}
             <div style={{ position: "absolute", top: "132mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>
               {Number(vaultPrintInvoice.vatAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
 
-            {/* TOTAL AMOUNT DUE */}
+            {/* RIGHT: Withholding Tax — only if > 0 */}
+            {Number(vaultPrintInvoice.withholdingTax || 0) > 0 && (
+              <div style={{ position: "absolute", top: "144mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>
+                {Number(vaultPrintInvoice.withholdingTax || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </div>
+            )}
+
+            {/* RIGHT: Total Amount Due */}
             <div style={{ position: "absolute", top: "165mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace", fontWeight: "bold" }}>
               {Number(vaultPrintInvoice.totalAmount_Due || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+
+            {/* LEFT: Vatable Sales */}
+            <div style={{ position: "absolute", top: "150mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+              {Number(vaultPrintInvoice.vatableSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+
+            {/* LEFT: VAT Amount */}
+            <div style={{ position: "absolute", top: "156mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+              {Number(vaultPrintInvoice.vatAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+
+            {/* LEFT: Zero Rated Sales */}
+            <div style={{ position: "absolute", top: "162mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+              0.00
+            </div>
+
+            {/* LEFT: VAT-Exempt Sales */}
+            <div style={{ position: "absolute", top: "168mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+              0.00
             </div>
           </div>
         )}
@@ -1298,9 +1325,24 @@ export default function POS() {
                     <div style={{ position: "absolute", left: "135mm", width: "13mm", textAlign: "right" }}>{(item.qty * item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                   </div>
                 ))}
+                {/* RIGHT: VATable Sales row */}
                 <div style={{ position: "absolute", top: "126mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                {/* RIGHT: VAT Amount row */}
                 <div style={{ position: "absolute", top: "132mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                {/* RIGHT: Withholding Tax */}
+                {withholdingTax > 0 && (
+                  <div style={{ position: "absolute", top: "144mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>{withholdingTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                )}
+                {/* RIGHT: Total Amount Due */}
                 <div style={{ position: "absolute", top: "165mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace", fontWeight: "bold" }}>{totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                {/* LEFT: Vatable Sales */}
+                <div style={{ position: "absolute", top: "150mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                {/* LEFT: VAT Amount */}
+                <div style={{ position: "absolute", top: "156mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                {/* LEFT: Zero Rated Sales */}
+                <div style={{ position: "absolute", top: "162mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>0.00</div>
+                {/* LEFT: VAT-Exempt Sales */}
+                <div style={{ position: "absolute", top: "168mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>0.00</div>
               </div>
               <p className="text-yellow-300 text-sm max-w-md text-center">
                 Red text shows where your data will print. If any value is misaligned, tell me by how many mm to move it (e.g. "invoice number 3mm left, 2mm down").
@@ -1368,19 +1410,46 @@ export default function POS() {
             </div>
           ))}
 
-          {/* TOTAL SALES (VATable) — top: 126mm; left: 135mm */}
+          {/* RIGHT: Total Sales (VATable) */}
           <div style={{ position: "absolute", top: "126mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>
             {vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
 
-          {/* VAT AMOUNT (12%) — top: 132mm; left: 135mm */}
+          {/* RIGHT: VAT Amount (12%) */}
           <div style={{ position: "absolute", top: "132mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>
             {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
 
-          {/* TOTAL AMOUNT DUE — top: 165mm; left: 135mm; bold */}
+          {/* RIGHT: Withholding Tax — only prints if WHT > 0 */}
+          {withholdingTax > 0 && (
+            <div style={{ position: "absolute", top: "144mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace" }}>
+              {withholdingTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </div>
+          )}
+
+          {/* RIGHT: Total Amount Due */}
           <div style={{ position: "absolute", top: "165mm", left: "135mm", width: "13mm", textAlign: "right", fontFamily: "monospace", fontWeight: "bold" }}>
             {totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+
+          {/* LEFT: Vatable Sales */}
+          <div style={{ position: "absolute", top: "150mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+            {vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+
+          {/* LEFT: VAT Amount */}
+          <div style={{ position: "absolute", top: "156mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+            {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </div>
+
+          {/* LEFT: Zero Rated Sales */}
+          <div style={{ position: "absolute", top: "162mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+            0.00
+          </div>
+
+          {/* LEFT: VAT-Exempt Sales */}
+          <div style={{ position: "absolute", top: "168mm", left: "55mm", width: "18mm", textAlign: "right", fontFamily: "monospace" }}>
+            0.00
           </div>
         </div>
       </div>

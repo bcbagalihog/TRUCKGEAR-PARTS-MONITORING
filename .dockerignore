@@ -14,10 +14,11 @@ npm-debug.log*
 Thumbs.db
 *.md
 !DEPLOY.md
-attached_assets
 .upm
 .pythonlibs
 migrations
 coverage
 .env
 .env.*
+truckgear_backup.sql
+truckgear_clean_backup.sql
