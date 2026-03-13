@@ -648,6 +648,19 @@ export async function registerRoutes(
     }
   });
 
+  // --- Delete a sales invoice ---
+  app.delete("/api/sales-invoices/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      await db.delete(salesInvoiceItems).where(eq(salesInvoiceItems.salesInvoiceId, id));
+      await db.delete(salesInvoices).where(eq(salesInvoices.id, id));
+      res.json({ success: true });
+    } catch (err) {
+      console.error("sales-invoice delete error:", err);
+      res.status(500).json({ error: "Failed to delete invoice" });
+    }
+  });
+
   // --- Bulk update sales invoice status (e.g. mark as BILLED) ---
   app.patch("/api/sales-invoices/bulk-status", isAuthenticated, async (req, res) => {
     try {

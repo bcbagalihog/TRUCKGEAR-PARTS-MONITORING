@@ -75,6 +75,7 @@ export default function POS() {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>(null);
   const [vaultPrintInvoice, setVaultPrintInvoice] = useState<any>(null);
+  const [deleteConfirmInvoice, setDeleteConfirmInvoice] = useState<any>(null);
 
   const { data: vaultInvoices = [], refetch: refetchVault } = useQuery<any[]>({
     queryKey: ["/api/sales-invoices"],
@@ -98,6 +99,22 @@ export default function POS() {
       toast({ title: "Invoice updated" });
     },
     onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/sales-invoices/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      setDeleteConfirmInvoice(null);
+      setIsVaultModalOpen(false);
+      setSelectedInvoice(null);
+      toast({ title: "Invoice deleted" });
+    },
+    onError: () => toast({ title: "Delete failed", variant: "destructive" }),
   });
 
   const openVaultModal = async (inv: any) => {
@@ -490,9 +507,14 @@ export default function POS() {
                           ₱{Number(inv.totalAmount_Due || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button className="text-blue-600 hover:text-blue-800 font-medium text-xs underline" onClick={(e) => { e.stopPropagation(); openVaultModal(inv); }}>
-                            Open
-                          </button>
+                          <div className="flex justify-end items-center gap-3">
+                            <button className="text-blue-600 hover:text-blue-800 font-medium text-xs underline" onClick={(e) => { e.stopPropagation(); openVaultModal(inv); }}>
+                              Open
+                            </button>
+                            <button className="text-red-500 hover:text-red-700" title="Delete invoice" onClick={(e) => { e.stopPropagation(); setDeleteConfirmInvoice(inv); }}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -847,6 +869,10 @@ export default function POS() {
                       <button onClick={() => handleVaultSavePDF(selectedInvoice)}
                         className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
                         <Download className="h-4 w-4" /> Save PDF
+                      </button>
+                      <button onClick={() => setDeleteConfirmInvoice(selectedInvoice)}
+                        className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-medium hover:bg-red-100">
+                        <Trash2 className="h-4 w-4" /> Delete
                       </button>
                     </>
                   ) : (
@@ -1358,6 +1384,42 @@ export default function POS() {
           </div>
         </div>
       </div>
+
+      {/* ── DELETE CONFIRMATION DIALOG ── */}
+      {deleteConfirmInvoice && (
+        <div className="fixed inset-0 bg-black/60 z-[400] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Delete Invoice</h3>
+                <p className="text-sm text-gray-500">This action cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-6">
+              Are you sure you want to delete invoice <span className="font-bold text-gray-900">#{deleteConfirmInvoice.invoiceNumber}</span> for <span className="font-semibold">{deleteConfirmInvoice.registeredName}</span>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeleteConfirmInvoice(null)}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteConfirmInvoice.id)}
+                disabled={deleteMutation.isPending}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete Invoice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }
