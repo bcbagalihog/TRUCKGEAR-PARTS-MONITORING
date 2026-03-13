@@ -1,0 +1,181 @@
+~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ gcloud builds submit \
+  --tag europe-west1-docker.pkg.dev/truckman-project/truckgear-repo/truckgear:latest
+Creating temporary archive of 134 file(s) totalling 10.9 MiB before compression.
+Some files were not included in the source upload.
+
+Check the gcloud log [/tmp/tmp.huEQDSoHib/logs/2026.03.13/13.37.00.890365.log] to see which files and the contents of the
+default gcloudignore file used (see `$ gcloud topic gcloudignore` to learn
+more).
+
+Uploading tarball of [.] to [gs://truckman-project_cloudbuild/source/1773409021.178654-ecd5c5f23b27411ba9dd523277779a41.tgz]
+Created [https://cloudbuild.googleapis.com/v1/projects/truckman-project/locations/global/builds/dc9a6140-77b4-4ff5-a3e4-ae20195c9bd7].
+Logs are available at [ https://console.cloud.google.com/cloud-build/builds/dc9a6140-77b4-4ff5-a3e4-ae20195c9bd7?project=1035094230417 ].
+Waiting for build to complete. Polling interval: 1 second(s).
+----------------------------------------------- REMOTE BUILD OUTPUT ------------------------------------------------
+starting build "dc9a6140-77b4-4ff5-a3e4-ae20195c9bd7"
+
+FETCHSOURCE
+Fetching storage object: gs://truckman-project_cloudbuild/source/1773409021.178654-ecd5c5f23b27411ba9dd523277779a41.tgz#1773409033435464
+Copying gs://truckman-project_cloudbuild/source/1773409021.178654-ecd5c5f23b27411ba9dd523277779a41.tgz#1773409033435464...
+/ [1 files][  9.9 MiB/  9.9 MiB]                                                
+Operation completed over 1 objects/9.9 MiB.
+BUILD
+Already have image (with digest): gcr.io/cloud-builders/gcb-internal
+Sending build context to Docker daemon  11.45MB
+Step 1/21 : FROM node:20-slim AS build
+20-slim: Pulling from library/node
+84a2afebaf4d: Pulling fs layer
+4e46de9abb28: Pulling fs layer
+38bb63ca3102: Pulling fs layer
+626acebb8e40: Pulling fs layer
+f9d9eff65102: Pulling fs layer
+4e46de9abb28: Verifying Checksum
+4e46de9abb28: Download complete
+f9d9eff65102: Download complete
+626acebb8e40: Verifying Checksum
+626acebb8e40: Download complete
+84a2afebaf4d: Verifying Checksum
+84a2afebaf4d: Download complete
+38bb63ca3102: Download complete
+84a2afebaf4d: Pull complete
+4e46de9abb28: Pull complete
+38bb63ca3102: Pull complete
+626acebb8e40: Pull complete
+f9d9eff65102: Pull complete
+Digest: sha256:a82f40540f5959e0003fb7b3c0f80490def2927be8bdbee7e3e0ac65cce3be92
+Status: Downloaded newer image for node:20-slim
+ 0917f806cde0
+Step 2/21 : WORKDIR /app
+ Running in 9ac39238a344
+Removing intermediate container 9ac39238a344
+ 393b0588d52f
+Step 3/21 : COPY package.json package-lock.json ./
+ b8148f4332e9
+Step 4/21 : RUN npm ci
+ Running in 3633cf6414fe
+
+added 565 packages, and audited 566 packages in 19s
+
+91 packages are looking for funding
+  run `npm fund` for details
+
+7 vulnerabilities (1 low, 2 moderate, 4 high)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 11.11.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.11.1
+npm notice To update run: npm install -g npm@11.11.1
+npm notice
+Removing intermediate container 3633cf6414fe
+ a1b935b41f96
+Step 5/21 : COPY . .
+ 109fa9460248
+Step 6/21 : ENV NODE_ENV=production
+ Running in d705d8b78590
+Removing intermediate container d705d8b78590
+ 1f04b1893a31
+Step 7/21 : RUN npm run build
+ Running in b92f4ede7615
+
+> rest-express@1.0.0 build
+> tsx server/build.ts
+
+📦 Building frontend (Vite)...
+vite v7.3.0 building client environment for production...
+transforming...
+✓ 2726 modules transformed.
+rendering chunks...
+computing gzip size...
+../dist/public/index.html                                                                                            2.16 kB │ gzip:   0.83 kB
+../dist/public/assets/Ben_Anthony_Bagalihog_A_simple__minimalist_logo_featuring_a_bl_1770796859768-DAoxvKsM.png    994.17 kB
+../dist/public/assets/index-D971Ga0t.css                                                                            90.87 kB │ gzip:  14.76 kB
+../dist/public/assets/purify.es-Bzr520pe.js                                                                         22.45 kB │ gzip:   8.63 kB
+../dist/public/assets/index.es-C3qIrl1Q.js                                                                         158.58 kB │ gzip:  52.93 kB
+../dist/public/assets/html2canvas.esm-DXEQVQnt.js                                                                  201.04 kB │ gzip:  47.43 kB
+../dist/public/assets/index-CJRqCsxx.js                                                                          1,593.70 kB │ gzip: 453.71 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 18.37s
+🔧 Building backend (esbuild)...
+✅ Build complete! Output in dist/
+Removing intermediate container b92f4ede7615
+ 6bf5571053a2
+Step 8/21 : FROM node:20-slim AS production
+ 0917f806cde0
+Step 9/21 : WORKDIR /app
+ Running in 9b52014e2f90
+Removing intermediate container 9b52014e2f90
+ 25b2cd934c48
+Step 10/21 : COPY --from=build /app/dist ./dist
+ ff248ac3f2d8
+Step 11/21 : COPY --from=build /app/node_modules ./node_modules
+ cad3b5448da5
+Step 12/21 : COPY --from=build /app/package.json ./
+ 7471df2fb0a9
+Step 13/21 : COPY --from=build /app/package-lock.json ./
+ 18b0b10ce0ec
+Step 14/21 : COPY --from=build /app/drizzle.config.ts ./
+ 96a66b03bcf3
+Step 15/21 : COPY --from=build /app/shared ./shared
+ e8995085497f
+Step 16/21 : RUN mkdir -p uploads && chown -R node:node /app
+ Running in f2e54e761682
+WARNING: Compute Engine Metadata server unavailable on attempt 1 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Read timed out. (read timeout=3)
+WARNING: Compute Engine Metadata server unavailable on attempt 1 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Read timed out. (read timeout=3)
+WARNING: Compute Engine Metadata server unavailable on attempt 2 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Read timed out. (read timeout=3)
+WARNING: Compute Engine Metadata server unavailable on attempt 2 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Read timed out. (read timeout=3)
+WARNING: Compute Engine Metadata server unavailable on attempt 3 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Read timed out. (read timeout=3)
+WARNING: Compute Engine Metadata server unavailable on attempt 3 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Read timed out. (read timeout=3)
+WARNING: Compute Engine Metadata server unavailable on attempt 4 of 5. Reason: HTTPConnectionPool(host='metadata.google.internal', port=80): Read timed out. (read timeout=3)
+Exception in thread Thread-1:
+Traceback (most recent call last):
+  File "/usr/lib/google-cloud-sdk/platform/bundledpythonunix/lib/python3.13/threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/api_lib/cloudbuild/logs.py", line 425, in run
+    self.target()
+    ~~~~~~~~~~~^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/api_lib/cloudbuild/logs.py", line 397, in Tail
+    self.Poll()
+    ~~~~~~~~~^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/api_lib/cloudbuild/logs.py", line 335, in Poll
+    res = self.transport.Request(self.url, self.cursor)
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/api_lib/cloudbuild/logs.py", line 79, in Request
+    response = self.session.request(
+        'GET', url, headers={'Range': 'bytes={0}-'.format(cursor)})
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/core/transport.py", line 281, in WrappedRequest
+    response = orig_request(*modified_args, **modified_kwargs)
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/core/credentials/requests.py", line 117, in WrappedRequest
+    creds.before_request(auth_request, method, url, headers)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/third_party/google/auth/credentials.py", line 239, in before_request
+    self._blocking_refresh(request)
+    ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/third_party/google/auth/credentials.py", line 202, in _blocking_refresh
+    self.refresh(request)
+    ~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/googlecloudsdk/core/credentials/creds.py", line 836, in _WrappedRefresh
+    orig_refresh(request)
+    ~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/third_party/google/auth/compute_engine/credentials.py", line 126, in refresh
+    self._retrieve_info(request)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/usr/bin/../lib/google-cloud-sdk/lib/third_party/google/auth/compute_engine/credentials.py", line 103, in _retrieve_info
+    self._service_account_email = info["email"]
+                                  ~~~~^^^^^^^^^
+TypeError: string indices must be integers, not 'str'
+ERROR: gcloud crashed (TypeError): string indices must be integers, not 'str'
+
+If you would like to report this issue, please run the following command:
+  gcloud feedback
+
+To check gcloud for common problems, please run the following command:
+  gcloud info --run-diagnostics
+bagalihogben@cloudshell:~/TRUCKGEAR-PARTS-MONITORING (truckman-project)$ 
