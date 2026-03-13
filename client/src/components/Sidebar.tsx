@@ -83,7 +83,7 @@ export function Sidebar() {
     : "User";
 
   return (
-    <div className="h-screen w-64 bg-card border-r border-border flex flex-col fixed left-0 top-0 z-50">
+    <div className="print:hidden h-screen w-64 bg-card border-r border-border flex flex-col fixed left-0 top-0 z-50">
       <div className="p-6">
         <a
           href="/"
