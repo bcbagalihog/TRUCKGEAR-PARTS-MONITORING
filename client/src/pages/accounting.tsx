@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   Home,
   Lock,
-  PrinterCheck,
+  Printer,
   Wallet,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -334,7 +334,7 @@ export default function Accounting() {
                         })
                       }
                     >
-                      <PrinterCheck className="h-4 w-4" />
+                      <Printer className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => setReceivingBill(bill)}

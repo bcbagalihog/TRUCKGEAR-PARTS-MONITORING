@@ -242,7 +242,8 @@ export async function registerRoutes(
   // --- POS: Drawer Management ---
   app.get("/api/pos/drawer-status", isAuthenticated, async (req, res) => {
     try {
-      const session = await storage.getActiveDrawerSession(req.user!.id);
+      const userId = (req.session as any).userId;
+      const session = await storage.getActiveDrawerSession(userId);
       res.json({ active: !!session, session: session || null });
     } catch (e) {
       console.error("drawer-status error:", e);
@@ -252,8 +253,9 @@ export async function registerRoutes(
 
   app.post("/api/pos/drawer-open", isAuthenticated, async (req, res) => {
     try {
+      const userId = (req.session as any).userId;
       const session = await storage.createDrawerSession({
-        userId: req.user!.id,
+        userId,
         openingBalance: String(req.body.openingBalance ?? 0),
         status: "OPEN",
         companyId: 1,
@@ -267,13 +269,82 @@ export async function registerRoutes(
 
   app.post("/api/pos/drawer-close", isAuthenticated, async (req, res) => {
     try {
-      const session = await storage.getActiveDrawerSession(req.user!.id);
+      const userId = (req.session as any).userId;
+      const session = await storage.getActiveDrawerSession(userId);
       if (!session) return res.status(404).json({ message: "No active drawer session" });
       await storage.closeDrawerSession(session.id, String(req.body.closingBalance ?? 0));
       res.json({ message: "Drawer closed" });
     } catch (e) {
       console.error("drawer-close error:", e);
       res.status(500).json({ message: "Failed to close drawer" });
+    }
+  });
+
+  // --- Accounts Payable ---
+  app.get("/api/accounts-payable", isAuthenticated, async (req, res) => {
+    const bills = await storage.getAccountsPayable();
+    res.json(bills);
+  });
+
+  app.post("/api/accounts-payable", isAuthenticated, async (req, res) => {
+    try {
+      const bill = await storage.createAccountsPayable(req.body);
+      res.status(201).json(bill);
+    } catch (e) {
+      console.error("accounts-payable create error:", e);
+      res.status(500).json({ message: "Failed to create bill" });
+    }
+  });
+
+  app.put("/api/accounts-payable/:id", isAuthenticated, async (req, res) => {
+    try {
+      const bill = await storage.updateAccountsPayable(Number(req.params.id), req.body);
+      res.json(bill);
+    } catch (e) {
+      console.error("accounts-payable update error:", e);
+      res.status(500).json({ message: "Failed to update bill" });
+    }
+  });
+
+  app.post("/api/accounts-payable/:id/receive", isAuthenticated, async (req, res) => {
+    try {
+      const bill = await storage.receiveAccountsPayable(Number(req.params.id), req.body.vendorDrNumber || "");
+      res.json(bill);
+    } catch (e) {
+      console.error("accounts-payable receive error:", e);
+      res.status(500).json({ message: "Failed to mark as received" });
+    }
+  });
+
+  // --- Admin: User Management ---
+  app.get("/api/admin/users", isAuthenticated, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users);
+    } catch (e) {
+      console.error("admin users error:", e);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/admin/users", isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.createAdminUser(req.body);
+      res.status(201).json(user);
+    } catch (e: any) {
+      console.error("admin create user error:", e);
+      if (e.code === '23505') return res.status(400).json({ message: "Username already taken" });
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/toggle-status", isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.toggleUserStatus(req.params.id, req.body.isActive);
+      res.json(user);
+    } catch (e) {
+      console.error("admin toggle status error:", e);
+      res.status(500).json({ message: "Failed to update user status" });
     }
   });
 

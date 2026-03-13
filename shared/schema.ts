@@ -156,6 +156,19 @@ export const inventoryTransactions = pgTable("inventory_transactions", {
   date: timestamp("date").defaultNow(),
 });
 
+// === ACCOUNTS PAYABLE ===
+export const accountsPayable = pgTable("accounts_payable", {
+  id: serial("id").primaryKey(),
+  invoiceNumber: text("invoice_number").notNull(),
+  vendorName: text("vendor_name").notNull(),
+  amountDue: numeric("amount_due").notNull().default("0"),
+  dueDate: date("due_date"),
+  status: text("status").notNull().default("UNPAID"),
+  vendorDrNumber: text("vendor_dr_number"),
+  companyId: integer("company_id").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === SALES INVOICES (VAT OUTPUT) ===
 export const salesInvoices = pgTable("sales_invoices", {
   id: serial("id").primaryKey(),
@@ -340,3 +353,5 @@ export type SalesOrder = typeof salesOrders.$inferSelect;
 export type SalesOrderItem = typeof salesOrderItems.$inferSelect;
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
+export type AccountsPayable = typeof accountsPayable.$inferSelect;
+export type InsertAccountsPayable = typeof accountsPayable.$inferInsert;

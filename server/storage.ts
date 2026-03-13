@@ -1,7 +1,7 @@
 import { 
   products, productOemNumbers, productCompatibility,
   customers, vendors, salesOrders, salesOrderItems, purchaseOrders, purchaseOrderItems,
-  inventoryTransactions, salesInvoices, salesInvoiceItems, drawerSessions,
+  inventoryTransactions, salesInvoices, salesInvoiceItems, drawerSessions, accountsPayable,
   type Product, type InsertProduct, type ProductWithDetails,
   type Customer, type InsertCustomer,
   type Vendor, type InsertVendor,
@@ -11,7 +11,9 @@ import {
   type SalesInvoice, type InsertSalesInvoice,
   type SalesInvoiceItem, type InsertSalesInvoiceItem,
   type DrawerSession, type InsertDrawerSession,
+  type AccountsPayable, type InsertAccountsPayable,
 } from "@shared/schema";
+import { users } from "@shared/models/auth";
 import { db } from "./db";
 import { eq, desc, sql, ilike, or, inArray } from "drizzle-orm";
 import { authStorage, type IAuthStorage } from "./replit_integrations/auth/storage";
@@ -63,6 +65,17 @@ export interface IStorage extends IAuthStorage {
 
   // Activity Report
   getActivityReport(period: string): Promise<any>;
+
+  // Accounts Payable
+  getAccountsPayable(): Promise<AccountsPayable[]>;
+  createAccountsPayable(data: InsertAccountsPayable): Promise<AccountsPayable>;
+  updateAccountsPayable(id: number, data: Partial<InsertAccountsPayable>): Promise<AccountsPayable>;
+  receiveAccountsPayable(id: number, vendorDrNumber: string): Promise<AccountsPayable>;
+
+  // Admin Users
+  getAllUsers(): Promise<any[]>;
+  createAdminUser(data: any): Promise<any>;
+  toggleUserStatus(id: string, isActive: boolean): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -432,6 +445,80 @@ export class DatabaseStorage implements IStorage {
       salesSummary: salesSummary.rows[0],
       purchaseSummary: purchaseSummary.rows[0],
     };
+  }
+
+  // --- ACCOUNTS PAYABLE ---
+  async getAccountsPayable(): Promise<AccountsPayable[]> {
+    return await db.select().from(accountsPayable).orderBy(desc(accountsPayable.createdAt));
+  }
+
+  async createAccountsPayable(data: InsertAccountsPayable): Promise<AccountsPayable> {
+    const [bill] = await db.insert(accountsPayable).values(data).returning();
+    return bill;
+  }
+
+  async updateAccountsPayable(id: number, data: Partial<InsertAccountsPayable>): Promise<AccountsPayable> {
+    const [bill] = await db.update(accountsPayable).set(data).where(eq(accountsPayable.id, id)).returning();
+    return bill;
+  }
+
+  async receiveAccountsPayable(id: number, vendorDrNumber: string): Promise<AccountsPayable> {
+    const [bill] = await db.update(accountsPayable)
+      .set({ vendorDrNumber, status: "RECEIVED" })
+      .where(eq(accountsPayable.id, id))
+      .returning();
+    return bill;
+  }
+
+  // --- ADMIN USERS ---
+  async getAllUsers(): Promise<any[]> {
+    const allUsers = await db.select({
+      id: users.id,
+      username: users.username,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      email: users.email,
+      role: users.role,
+      companyId: users.companyId,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+    }).from(users);
+    return allUsers;
+  }
+
+  async createAdminUser(data: any): Promise<any> {
+    const bcrypt = await import("bcryptjs");
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const [user] = await db.insert(users).values({
+      username: data.username,
+      password: hashedPassword,
+      firstName: data.firstName || null,
+      lastName: data.lastName || null,
+      role: data.role || "staff",
+      companyId: data.companyId || 1,
+    }).returning({
+      id: users.id,
+      username: users.username,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      role: users.role,
+      companyId: users.companyId,
+      isActive: users.isActive,
+      createdAt: users.createdAt,
+    });
+    return user;
+  }
+
+  async toggleUserStatus(id: string, isActive: boolean): Promise<any> {
+    const [user] = await db.update(users)
+      .set({ isActive })
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        username: users.username,
+        isActive: users.isActive,
+      });
+    return user;
   }
 }
 
