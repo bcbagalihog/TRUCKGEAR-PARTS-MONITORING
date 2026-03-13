@@ -166,40 +166,57 @@
     background: white !important;
   }
 
-  /* Hide everything except the print area */
-  body > *,
-  #root > *,
-  #root > div > * {
-    display: none !important;
+  /*
+   * Strategy: use visibility:hidden (NOT display:none) on everything.
+   * visibility:hidden keeps the DOM tree intact so that
+   * #print-area children can restore themselves with visibility:visible.
+   * display:none on a parent would swallow children entirely.
+   */
+  body * {
+    visibility: hidden !important;
   }
 
-  nav,
-  aside,
-  header,
-  footer,
-  button,
-  .no-print,
-  [class*="sidebar"],
-  [class*="Sidebar"] {
-    display: none !important;
+  /* The print area and ALL of its descendants become visible */
+  #print-area,
+  #print-area *,
+  #vault-print-area,
+  #vault-print-area * {
+    visibility: visible !important;
   }
 
-  /* Show only the active print area */
-  #root,
-  #root > div {
-    display: block !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-  }
-
+  /* Force the print containers themselves out of any hidden/display:none state
+     and anchor them at the top-left of the printed page */
   #print-area,
   #vault-print-area {
     display: block !important;
-    position: absolute !important;
+    position: fixed !important;
     top: 0 !important;
     left: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 148mm !important;
+    height: 210mm !important;
+    overflow: hidden !important;
+    background: white !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    font-size: 10pt !important;
+    color: black !important;
+  }
+
+  /*
+   * When doing a vault reprint, body gets class 'vault-printing'.
+   * Suppress the main invoice print area so only the vault area prints.
+   * When printing a fresh invoice (no class), suppress the vault area.
+   */
+  body.vault-printing #print-area,
+  body.vault-printing #print-area * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+
+  body:not(.vault-printing) #vault-print-area,
+  body:not(.vault-printing) #vault-print-area * {
+    visibility: hidden !important;
+    display: none !important;
   }
 }

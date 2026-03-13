@@ -157,7 +157,11 @@ export default function POS() {
 
   const handleVaultReprint = (inv: any) => {
     setVaultPrintInvoice(inv);
-    setTimeout(() => window.print(), 300);
+    setTimeout(() => {
+      document.body.classList.add("vault-printing");
+      window.print();
+      document.body.classList.remove("vault-printing");
+    }, 300);
   };
 
   const handleVaultSavePDF = (inv: any) => {
