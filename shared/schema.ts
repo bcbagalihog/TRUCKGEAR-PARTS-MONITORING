@@ -93,7 +93,7 @@ export const drawerSessions = pgTable("drawer_sessions", {
   companyId: integer("company_id").notNull().default(1),
 });
 
-// === SALES ORDERS ===
+// === SALES ORDERS (RESTORED) ===
 export const salesOrders = pgTable("sales_orders", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id")
@@ -119,7 +119,7 @@ export const salesOrderItems = pgTable("sales_order_items", {
   unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
 });
 
-// === PURCHASE ORDERS ===
+// === PURCHASE ORDERS (RESTORED) ===
 export const purchaseOrders = pgTable("purchase_orders", {
   id: serial("id").primaryKey(),
   vendorId: integer("vendor_id")
@@ -184,7 +184,117 @@ export const salesInvoiceItems = pgTable("sales_invoice_items", {
   amount: numeric("amount").notNull(),
 });
 
-// === ZOD SCHEMAS (RESTORED ALL) ===
+// === RELATIONS (CRITICAL FOR DRIZZLE) ===
+export const usersRelations = relations(users, ({ many }) => ({
+  drawerSessions: many(drawerSessions),
+}));
+
+export const productsRelations = relations(products, ({ many }) => ({
+  oemNumbers: many(productOemNumbers),
+  compatibility: many(productCompatibility),
+  inventoryTransactions: many(inventoryTransactions),
+}));
+
+export const productOemNumbersRelations = relations(productOemNumbers, ({ one }) => ({
+  product: one(products, {
+    fields: [productOemNumbers.productId],
+    references: [products.id],
+  }),
+}));
+
+export const productCompatibilityRelations = relations(productCompatibility, ({ one }) => ({
+  product: one(products, {
+    fields: [productCompatibility.productId],
+    references: [products.id],
+  }),
+}));
+
+export const customersRelations = relations(customers, ({ many }) => ({
+  salesOrders: many(salesOrders),
+}));
+
+export const vendorsRelations = relations(vendors, ({ many }) => ({
+  purchaseOrders: many(purchaseOrders),
+}));
+
+export const salesOrdersRelations = relations(salesOrders, ({ one, many }) => ({
+  customer: one(customers, {
+    fields: [salesOrders.customerId],
+    references: [customers.id],
+  }),
+  items: many(salesOrderItems),
+}));
+
+export const salesOrderItemsRelations = relations(salesOrderItems, ({ one }) => ({
+  salesOrder: one(salesOrders, {
+    fields: [salesOrderItems.salesOrderId],
+    references: [salesOrders.id],
+  }),
+  product: one(products, {
+    fields: [salesOrderItems.productId],
+    references: [products.id],
+  }),
+}));
+
+export const purchaseOrdersRelations = relations(purchaseOrders, ({ one, many }) => ({
+  vendor: one(vendors, {
+    fields: [purchaseOrders.vendorId],
+    references: [vendors.id],
+  }),
+  items: many(purchaseOrderItems),
+}));
+
+export const purchaseOrderItemsRelations = relations(purchaseOrderItems, ({ one }) => ({
+  purchaseOrder: one(purchaseOrders, {
+    fields: [purchaseOrderItems.purchaseOrderId],
+    references: [purchaseOrders.id],
+  }),
+  product: one(products, {
+    fields: [purchaseOrderItems.productId],
+    references: [products.id],
+  }),
+}));
+
+export const inventoryTransactionsRelations = relations(inventoryTransactions, ({ one }) => ({
+  product: one(products, {
+    fields: [inventoryTransactions.productId],
+    references: [products.id],
+  }),
+}));
+
+export const drawerSessionsRelations = relations(
+  drawerSessions,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [drawerSessions.userId],
+      references: [users.id],
+    }),
+    salesInvoices: many(salesInvoices),
+  }),
+);
+
+export const salesInvoicesRelations = relations(
+  salesInvoices,
+  ({ one, many }) => ({
+    drawerSession: one(drawerSessions, {
+      fields: [salesInvoices.drawerSessionId],
+      references: [drawerSessions.id],
+    }),
+    items: many(salesInvoiceItems),
+  }),
+);
+
+export const salesInvoiceItemsRelations = relations(
+  salesInvoiceItems,
+  ({ one }) => ({
+    invoice: one(salesInvoices, {
+      fields: [salesInvoiceItems.salesInvoiceId],
+      references: [salesInvoices.id],
+    }),
+  }),
+);
+
+// === ZOD SCHEMAS ===
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
 });
@@ -221,41 +331,12 @@ export const insertSalesInvoiceItemSchema = createInsertSchema(
 
 // === TYPES ===
 export type Product = typeof products.$inferSelect;
-export type InsertProduct = typeof products.$inferInsert;
-export type Customer = typeof customers.$inferSelect;
-export type InsertCustomer = typeof customers.$inferInsert;
-export type Vendor = typeof vendors.$inferSelect;
-export type InsertVendor = typeof vendors.$inferInsert;
-export type DrawerSession = typeof drawerSessions.$inferSelect;
 export type SalesInvoice = typeof salesInvoices.$inferSelect;
 export type SalesInvoiceItem = typeof salesInvoiceItems.$inferSelect;
-export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
-export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
-export type InsertPurchaseOrder = typeof purchaseOrders.$inferInsert;
-export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
-export type InsertPurchaseOrderItem = typeof purchaseOrderItems.$inferInsert;
+export type DrawerSession = typeof drawerSessions.$inferSelect;
+export type Customer = typeof customers.$inferSelect;
+export type Vendor = typeof vendors.$inferSelect;
 export type SalesOrder = typeof salesOrders.$inferSelect;
-export type InsertSalesOrder = typeof salesOrders.$inferInsert;
 export type SalesOrderItem = typeof salesOrderItems.$inferSelect;
-export type InsertSalesOrderItem = typeof salesOrderItems.$inferInsert;
-
-// === COMPLEX TYPES ===
-export type ProductWithDetails = Product & {
-  oemNumbers: string[];
-  compatibility: Array<{
-    id: number;
-    productId: number;
-    make: string;
-    model: string;
-    yearStart: number | null;
-    yearEnd: number | null;
-  }>;
-};
-export type SalesOrderWithDetails = SalesOrder & {
-  items: SalesOrderItem[];
-  customer?: Customer;
-};
-export type PurchaseOrderWithDetails = PurchaseOrder & {
-  items: PurchaseOrderItem[];
-  vendor?: Vendor;
-};
+export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
+export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
