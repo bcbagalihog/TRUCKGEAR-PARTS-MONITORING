@@ -1080,66 +1080,51 @@ export default function POS() {
               color: "black",
             }}
           >
-            {/* INVOICE NUMBER */}
-            <div style={{ position: "absolute", top: "45mm", right: "20mm", fontWeight: "bold", fontSize: "13pt" }}>
-              {vaultPrintInvoice.invoiceNumber}
-            </div>
-
             {/* DATE */}
-            <div style={{ position: "absolute", top: "45mm", right: "60mm", fontSize: "9pt" }}>
+            <div style={{ position: "absolute", top: "18mm", left: "115mm" }}>
               {new Date(vaultPrintInvoice.date || vaultPrintInvoice.createdAt).toLocaleDateString("en-PH")}
             </div>
 
-            {/* SOLD TO / CUSTOMER NAME */}
-            <div style={{ position: "absolute", top: "65mm", left: "30mm", width: "85mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+            {/* CUSTOMER NAME (Sold To / Registered Name) */}
+            <div style={{ position: "absolute", top: "24mm", left: "40mm", width: "100mm", whiteSpace: "nowrap", overflow: "hidden" }}>
               {vaultPrintInvoice.registeredName}
-            </div>
-
-            {/* REGISTERED NAME */}
-            <div style={{ position: "absolute", top: "72mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>
-              {vaultPrintInvoice.registeredName}
-            </div>
-
-            {/* TIN */}
-            <div style={{ position: "absolute", top: "79mm", left: "30mm", width: "108mm" }}>
-              {vaultPrintInvoice.tin}
             </div>
 
             {/* BUSINESS ADDRESS */}
-            <div style={{ position: "absolute", top: "86mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: "36mm", left: "40mm", width: "100mm", lineHeight: "5mm", whiteSpace: "nowrap", overflow: "hidden" }}>
               {vaultPrintInvoice.businessAddress}
             </div>
 
             {/* ITEMS TABLE */}
             {(vaultPrintInvoice.items || []).map((it: any, index: number) => (
-              <div key={index} style={{ position: "absolute", top: `${95 + index * 6.5}mm`, left: "15mm", width: "120mm" }}>
-                <div style={{ position: "absolute", left: "0", width: "68mm", overflow: "hidden", whiteSpace: "nowrap" }}>
+              <div key={index} style={{ position: "absolute", top: `${58 + index * 6.8}mm`, left: "0", width: "148mm" }}>
+                <div style={{ position: "absolute", left: "10mm", width: "83mm", overflow: "hidden", whiteSpace: "nowrap" }}>
                   {it.itemDescription}
                 </div>
-                <div style={{ position: "absolute", left: "68mm", width: "14mm", textAlign: "center" }}>
+                <div style={{ position: "absolute", left: "95mm", width: "13mm", textAlign: "center" }}>
                   {it.quantity}
                 </div>
-                <div style={{ position: "absolute", left: "82mm", width: "20mm", textAlign: "right" }}>
+                <div style={{ position: "absolute", left: "110mm", width: "18mm", textAlign: "right" }}>
                   {Number(it.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
-                <div style={{ position: "absolute", left: "102mm", width: "18mm", textAlign: "right" }}>
+                <div style={{ position: "absolute", left: "130mm", width: "16mm", textAlign: "right" }}>
                   {Number(it.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
               </div>
             ))}
 
             {/* VATABLE SALES */}
-            <div style={{ position: "absolute", bottom: "52mm", right: "20mm", width: "30mm", textAlign: "right" }}>
+            <div style={{ position: "absolute", top: "150mm", left: "110mm", width: "34mm", textAlign: "right" }}>
               {Number(vaultPrintInvoice.vatableSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
 
-            {/* VAT AMOUNT */}
-            <div style={{ position: "absolute", bottom: "46mm", right: "20mm", width: "30mm", textAlign: "right" }}>
+            {/* VAT AMOUNT (12%) */}
+            <div style={{ position: "absolute", top: "156mm", left: "110mm", width: "34mm", textAlign: "right" }}>
               {Number(vaultPrintInvoice.vatAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
 
             {/* TOTAL AMOUNT DUE */}
-            <div style={{ position: "absolute", bottom: "40mm", right: "20mm", width: "30mm", textAlign: "right", fontWeight: "bold" }}>
+            <div style={{ position: "absolute", top: "162mm", left: "130mm", width: "16mm", textAlign: "right", fontWeight: "bold" }}>
               {Number(vaultPrintInvoice.totalAmount_Due || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
           </div>
@@ -1254,7 +1239,7 @@ export default function POS() {
                   Close
                 </button>
               </div>
-              {/* A5 container — form photo as background, data in red for calibration */}
+              {/* A5 calibration preview — form as background, data overlaid in red */}
               <div
                 style={{
                   position: "relative",
@@ -1270,23 +1255,20 @@ export default function POS() {
                   flexShrink: 0,
                 }}
               >
-                <div style={{ position: "absolute", top: "45mm", right: "20mm", fontWeight: "bold", fontSize: "13pt" }}>{invoiceNo}</div>
-                <div style={{ position: "absolute", top: "45mm", right: "60mm", fontSize: "9pt" }}>{date}</div>
-                <div style={{ position: "absolute", top: "65mm", left: "30mm", width: "85mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.name}</div>
-                <div style={{ position: "absolute", top: "72mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.registeredName || customer.name}</div>
-                <div style={{ position: "absolute", top: "79mm", left: "30mm", width: "108mm" }}>{customer.tin}</div>
-                <div style={{ position: "absolute", top: "86mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.address}</div>
+                <div style={{ position: "absolute", top: "18mm", left: "115mm" }}>{date}</div>
+                <div style={{ position: "absolute", top: "24mm", left: "40mm", width: "100mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.name}</div>
+                <div style={{ position: "absolute", top: "36mm", left: "40mm", width: "100mm", lineHeight: "5mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.address}</div>
                 {items.filter((i) => i.description.trim() !== "").map((item, index) => (
-                  <div key={index} style={{ position: "absolute", top: `${95 + index * 6.5}mm`, left: "15mm", width: "120mm" }}>
-                    <div style={{ position: "absolute", left: "0", width: "68mm", overflow: "hidden", whiteSpace: "nowrap" }}>{item.description}</div>
-                    <div style={{ position: "absolute", left: "68mm", width: "14mm", textAlign: "center" }}>{item.qty}</div>
-                    <div style={{ position: "absolute", left: "82mm", width: "20mm", textAlign: "right" }}>{Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                    <div style={{ position: "absolute", left: "102mm", width: "18mm", textAlign: "right" }}>{(item.qty * item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                  <div key={index} style={{ position: "absolute", top: `${58 + index * 6.8}mm`, left: "0", width: "148mm" }}>
+                    <div style={{ position: "absolute", left: "10mm", width: "83mm", overflow: "hidden", whiteSpace: "nowrap" }}>{item.description}</div>
+                    <div style={{ position: "absolute", left: "95mm", width: "13mm", textAlign: "center" }}>{item.qty}</div>
+                    <div style={{ position: "absolute", left: "110mm", width: "18mm", textAlign: "right" }}>{Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    <div style={{ position: "absolute", left: "130mm", width: "16mm", textAlign: "right" }}>{(item.qty * item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                   </div>
                 ))}
-                <div style={{ position: "absolute", bottom: "52mm", right: "20mm", width: "30mm", textAlign: "right" }}>{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <div style={{ position: "absolute", bottom: "46mm", right: "20mm", width: "30mm", textAlign: "right" }}>{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                <div style={{ position: "absolute", bottom: "40mm", right: "20mm", width: "30mm", textAlign: "right", fontWeight: "bold" }}>{totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ position: "absolute", top: "150mm", left: "110mm", width: "34mm", textAlign: "right" }}>{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ position: "absolute", top: "156mm", left: "110mm", width: "34mm", textAlign: "right" }}>{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ position: "absolute", top: "162mm", left: "130mm", width: "16mm", textAlign: "right", fontWeight: "bold" }}>{totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
               </div>
               <p className="text-yellow-300 text-sm max-w-md text-center">
                 Red text shows where your data will print. If any value is misaligned, tell me by how many mm to move it (e.g. "invoice number 3mm left, 2mm down").
@@ -1301,8 +1283,8 @@ export default function POS() {
           className="hidden print:block"
           style={{
             position: "relative",
-            width: "148mm",   /* A5 width — do not change */
-            height: "210mm",  /* A5 height — do not change */
+            width: "148mm",
+            height: "210mm",
             margin: "0",
             padding: "0",
             overflow: "hidden",
@@ -1312,70 +1294,55 @@ export default function POS() {
             color: "black",
           }}
         >
-          {/* INVOICE NUMBER — increase right to move left; increase top to move down */}
-          <div style={{ position: "absolute", top: "45mm", right: "20mm", fontWeight: "bold", fontSize: "13pt" }}>
-            {invoiceNo}
-          </div>
-
-          {/* DATE — increase right to move left; adjust top for vertical alignment */}
-          <div style={{ position: "absolute", top: "45mm", right: "60mm", fontSize: "9pt" }}>
+          {/* DATE — adjust top/left if date field on form is different */}
+          <div style={{ position: "absolute", top: "18mm", left: "115mm" }}>
             {date}
           </div>
 
-          {/* SOLD TO / CUSTOMER NAME — increase left to move right; adjust top */}
-          <div style={{ position: "absolute", top: "65mm", left: "30mm", width: "85mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+          {/* CUSTOMER NAME (Sold To) — adjust top/left to match form line */}
+          <div style={{ position: "absolute", top: "24mm", left: "40mm", width: "100mm", whiteSpace: "nowrap", overflow: "hidden" }}>
             {customer.name}
           </div>
 
-          {/* REGISTERED NAME — adjust top for next line alignment */}
-          <div style={{ position: "absolute", top: "72mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>
-            {customer.registeredName || customer.name}
-          </div>
-
-          {/* TIN — adjust top for TIN line alignment */}
-          <div style={{ position: "absolute", top: "79mm", left: "30mm", width: "108mm" }}>
-            {customer.tin}
-          </div>
-
-          {/* BUSINESS ADDRESS — adjust top for address line alignment */}
-          <div style={{ position: "absolute", top: "86mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+          {/* BUSINESS ADDRESS — adjust top to match address line on form */}
+          <div style={{ position: "absolute", top: "36mm", left: "40mm", width: "100mm", lineHeight: "5mm", whiteSpace: "nowrap", overflow: "hidden" }}>
             {customer.address}
           </div>
 
-          {/* ITEMS TABLE — top: first row start; increase index * N to widen row spacing */}
+          {/* ITEMS TABLE — first row at 58mm; each row spaced 6.8mm apart */}
           {items.filter((i) => i.description.trim() !== "").map((item, index) => (
-            <div key={index} style={{ position: "absolute", top: `${95 + index * 6.5}mm`, left: "15mm", width: "120mm" }}>
-              {/* Description — adjust width to fit description column */}
-              <div style={{ position: "absolute", left: "0", width: "68mm", overflow: "hidden", whiteSpace: "nowrap" }}>
+            <div key={index} style={{ position: "absolute", top: `${58 + index * 6.8}mm`, left: "0", width: "148mm" }}>
+              {/* Description — starts at 10mm from page left */}
+              <div style={{ position: "absolute", left: "10mm", width: "83mm", overflow: "hidden", whiteSpace: "nowrap" }}>
                 {item.description}
               </div>
-              {/* Qty — adjust left to align with Quantity column */}
-              <div style={{ position: "absolute", left: "68mm", width: "14mm", textAlign: "center" }}>
+              {/* Qty — at 95mm from page left */}
+              <div style={{ position: "absolute", left: "95mm", width: "13mm", textAlign: "center" }}>
                 {item.qty}
               </div>
-              {/* Unit Price — adjust left to align with Unit Cost/Price column */}
-              <div style={{ position: "absolute", left: "82mm", width: "20mm", textAlign: "right" }}>
+              {/* Unit Price — at 110mm from page left */}
+              <div style={{ position: "absolute", left: "110mm", width: "18mm", textAlign: "right" }}>
                 {Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
-              {/* Amount — adjust left to align with Amount column */}
-              <div style={{ position: "absolute", left: "102mm", width: "18mm", textAlign: "right" }}>
+              {/* Row Total — at 130mm from page left */}
+              <div style={{ position: "absolute", left: "130mm", width: "16mm", textAlign: "right" }}>
                 {(item.qty * item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
           ))}
 
-          {/* VATABLE SALES — increase bottom to move up; adjust right to move left */}
-          <div style={{ position: "absolute", bottom: "52mm", right: "20mm", width: "30mm", textAlign: "right" }}>
+          {/* VATABLE SALES — adjust top to match VATable Sales box on form */}
+          <div style={{ position: "absolute", top: "150mm", left: "110mm", width: "34mm", textAlign: "right" }}>
             {vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
 
-          {/* VAT AMOUNT (12%) — increase bottom to move up */}
-          <div style={{ position: "absolute", bottom: "46mm", right: "20mm", width: "30mm", textAlign: "right" }}>
+          {/* VAT AMOUNT (12%) — adjust top to match VAT box on form */}
+          <div style={{ position: "absolute", top: "156mm", left: "110mm", width: "34mm", textAlign: "right" }}>
             {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
 
-          {/* TOTAL AMOUNT DUE — increase bottom to move up; adjust right to move left */}
-          <div style={{ position: "absolute", bottom: "40mm", right: "20mm", width: "30mm", textAlign: "right", fontWeight: "bold" }}>
+          {/* TOTAL AMOUNT DUE — adjust top/left to match total box on form */}
+          <div style={{ position: "absolute", top: "162mm", left: "130mm", width: "16mm", textAlign: "right", fontWeight: "bold" }}>
             {totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
         </div>
