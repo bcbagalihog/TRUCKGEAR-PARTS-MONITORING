@@ -143,6 +143,7 @@ export default function POS() {
       checkMaturityDate: selectedInvoice.checkMaturityDate || "",
       netDays: selectedInvoice.netDays || "",
       poNumber: selectedInvoice.poNumber || "",
+      withholdingTax: selectedInvoice.withholdingTax || "0",
       items: (selectedInvoice.items || []).map((it: any) => ({
         itemDescription: it.itemDescription,
         quantity: it.quantity,
@@ -161,16 +162,18 @@ export default function POS() {
       unitPrice: String(it.unitPrice),
       amount: String(Number(it.quantity) * Number(it.unitPrice)),
     }));
-    const total = items.reduce((s: number, i: any) => s + Number(i.amount), 0);
-    const vat = total / 1.12;
+    const gross = items.reduce((s: number, i: any) => s + Number(i.amount), 0);
+    const wht = Number(editData.withholdingTax || 0);
+    const vat = gross / 1.12;
     updateMutation.mutate({
       id: selectedInvoice.id,
       data: {
         ...editData,
         items,
-        "totalAmount_Due": String(total),
+        withholdingTax: String(wht.toFixed(2)),
+        "totalAmount_Due": String((gross - wht).toFixed(2)),
         vatableSales: String(vat.toFixed(2)),
-        vatAmount: String((total - vat).toFixed(2)),
+        vatAmount: String((gross - vat).toFixed(2)),
       },
     });
   };
@@ -1066,7 +1069,7 @@ export default function POS() {
 
                 {/* Totals */}
                 <div className="flex justify-end">
-                  <div className="text-sm space-y-1 text-right min-w-[220px]">
+                  <div className="text-sm space-y-1 text-right min-w-[260px]">
                     <div className="flex justify-between gap-8 text-gray-600">
                       <span>VATable Sales</span>
                       <span className="font-mono">₱{Number(isEditing ? (editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) / 1.12) : (selectedInvoice.vatableSales || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
@@ -1075,10 +1078,30 @@ export default function POS() {
                       <span>VAT (12%)</span>
                       <span className="font-mono">₱{Number(isEditing ? (editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) - editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) / 1.12) : (selectedInvoice.vatAmount || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex justify-between gap-8 font-black text-lg border-t pt-2 bg-yellow-50 px-3 py-2 rounded-lg">
+                    <div className="flex justify-between items-center gap-8 text-gray-600 border-t pt-2">
+                      <span className="whitespace-nowrap">Withholding Tax</span>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="w-28 border rounded px-2 py-1 text-right font-mono text-sm"
+                          value={editData.withholdingTax}
+                          onChange={(e) => setEditData({ ...editData, withholdingTax: e.target.value })}
+                        />
+                      ) : (
+                        <span className="font-mono text-red-600">
+                          {Number(selectedInvoice.withholdingTax || 0) > 0 ? `-₱${Number(selectedInvoice.withholdingTax).toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "₱0.00"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex justify-between gap-8 font-black text-lg bg-yellow-50 px-3 py-2 rounded-lg">
                       <span>TOTAL DUE</span>
                       <span className="font-mono text-blue-700">
-                        ₱{Number(isEditing ? editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) : (selectedInvoice.totalAmount_Due || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        ₱{Number(isEditing
+                          ? editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) - Number(editData.withholdingTax || 0)
+                          : (selectedInvoice.totalAmount_Due || 0)
+                        ).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
