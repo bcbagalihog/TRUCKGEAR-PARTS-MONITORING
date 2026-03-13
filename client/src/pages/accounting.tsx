@@ -231,6 +231,8 @@ export default function Accounting() {
   const [apFilter, setApFilter] = useState<"ALL" | "PENDING_COUNTER" | "COUNTERED">("ALL");
   const [apVendorFilter, setApVendorFilter] = useState("");
   const [editingBill, setEditingBill] = useState<Bill | null>(null);
+  const [deletingBill, setDeletingBill] = useState<Bill | null>(null);
+  const [isDeletingBill, setIsDeletingBill] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
 
@@ -458,6 +460,22 @@ export default function Accounting() {
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDeleteBill = async () => {
+    if (!deletingBill?.id) return;
+    setIsDeletingBill(true);
+    try {
+      const res = await fetch(`/api/accounts-payable/${deletingBill.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setDeletingBill(null);
+      fetchBills(apVendorFilter || undefined, apFilter);
+      toast({ title: "Deleted", description: "Invoice removed from Accounts Payable." });
+    } catch {
+      toast({ title: "Error", description: "Failed to delete.", variant: "destructive" });
+    } finally {
+      setIsDeletingBill(false);
     }
   };
 
@@ -691,9 +709,14 @@ export default function Accounting() {
                       ₱{Number(bill.amountDue).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <button onClick={() => setEditingBill(bill)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors" data-testid={`edit-ap-${bill.id}`}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => setEditingBill(bill)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors" data-testid={`edit-ap-${bill.id}`}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => setDeletingBill(bill)} className="p-1 text-gray-400 hover:text-red-600 transition-colors" data-testid={`delete-ap-${bill.id}`}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1123,6 +1146,45 @@ export default function Accounting() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE AP CONFIRMATION ── */}
+      {deletingBill && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Delete Invoice</h3>
+                <p className="text-sm text-gray-500">This cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-6">
+              Delete invoice <span className="font-bold text-gray-900">#{deletingBill.invoiceNumber}</span> from{" "}
+              <span className="font-semibold">{deletingBill.vendorName}</span> amounting to{" "}
+              <span className="font-bold">₱{Number(deletingBill.amountDue).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingBill(null)}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteBill}
+                disabled={isDeletingBill}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+                data-testid="button-confirm-delete-ap"
+              >
+                {isDeletingBill ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -502,6 +502,16 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/accounts-payable/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteAccountsPayable(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e) {
+      console.error("accounts-payable delete error:", e);
+      res.status(500).json({ message: "Failed to delete bill" });
+    }
+  });
+
   app.post("/api/accounts-payable/:id/receive", isAuthenticated, async (req, res) => {
     try {
       const bill = await storage.receiveAccountsPayable(Number(req.params.id), req.body.vendorDrNumber || "");

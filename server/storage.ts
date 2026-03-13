@@ -590,6 +590,10 @@ export class DatabaseStorage implements IStorage {
     return bill;
   }
 
+  async deleteAccountsPayable(id: number): Promise<void> {
+    await db.delete(accountsPayable).where(eq(accountsPayable.id, id));
+  }
+
   async bulkMarkCountered(ids: number[], counterReceiptId: number): Promise<void> {
     if (ids.length === 0) return;
     await db.update(accountsPayable)
