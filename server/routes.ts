@@ -585,6 +585,49 @@ export async function registerRoutes(
     }
   });
 
+  // --- Get single invoice with items ---
+  app.get("/api/sales-invoices/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const [inv] = await db.select().from(salesInvoices).where(eq(salesInvoices.id, id));
+      if (!inv) return res.status(404).json({ error: "Invoice not found" });
+      const items = await db.select().from(salesInvoiceItems).where(eq(salesInvoiceItems.salesInvoiceId, id));
+      res.json({ ...inv, items });
+    } catch (err) {
+      console.error("sales-invoice get error:", err);
+      res.status(500).json({ error: "Failed to fetch invoice" });
+    }
+  });
+
+  // --- Update invoice + replace items ---
+  app.put("/api/sales-invoices/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const { items, ...invoiceData } = req.body;
+      await db.update(salesInvoices).set(invoiceData).where(eq(salesInvoices.id, id));
+      if (Array.isArray(items)) {
+        await db.delete(salesInvoiceItems).where(eq(salesInvoiceItems.salesInvoiceId, id));
+        if (items.length > 0) {
+          await db.insert(salesInvoiceItems).values(
+            items.map((it: any) => ({
+              salesInvoiceId: id,
+              itemDescription: it.itemDescription || it.description || "",
+              quantity: Number(it.quantity) || 1,
+              unitPrice: String(it.unitPrice || it.price || 0),
+              amount: String(it.amount || (Number(it.quantity) * Number(it.unitPrice || it.price || 0))),
+            }))
+          );
+        }
+      }
+      const [updated] = await db.select().from(salesInvoices).where(eq(salesInvoices.id, id));
+      const updatedItems = await db.select().from(salesInvoiceItems).where(eq(salesInvoiceItems.salesInvoiceId, id));
+      res.json({ ...updated, items: updatedItems });
+    } catch (err) {
+      console.error("sales-invoice update error:", err);
+      res.status(500).json({ error: "Failed to update invoice" });
+    }
+  });
+
   // --- Bulk update sales invoice status (e.g. mark as BILLED) ---
   app.patch("/api/sales-invoices/bulk-status", isAuthenticated, async (req, res) => {
     try {

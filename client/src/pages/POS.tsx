@@ -9,10 +9,20 @@ import {
   Banknote,
   X,
   ArrowUpCircle,
+  Archive,
+  FileText,
+  Pencil,
+  Download,
+  Eye,
+  Check,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Product } from "@shared/schema";
+// @ts-ignore
+import jsPDF from "jspdf";
+// @ts-ignore
+import autoTable from "jspdf-autotable";
 
 export default function POS() {
   const { toast } = useToast();
@@ -51,6 +61,161 @@ export default function POS() {
   const [checkMaturityDate, setCheckMaturityDate] = useState("");
   const [netDays, setNetDays] = useState("30");
   const [poNumber, setPoNumber] = useState("");
+
+  // VAULT / TAB STATE
+  const queryClient = useQueryClient();
+  const [posTab, setPosTab] = useState<"new" | "vault">("new");
+  const [vaultSearch, setVaultSearch] = useState("");
+  const [vaultStatusFilter, setVaultStatusFilter] = useState("ALL");
+  const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
+  const [isVaultModalOpen, setIsVaultModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState<any>(null);
+  const [vaultPrintInvoice, setVaultPrintInvoice] = useState<any>(null);
+
+  const { data: vaultInvoices = [], refetch: refetchVault } = useQuery<any[]>({
+    queryKey: ["/api/sales-invoices"],
+    queryFn: () => fetch("/api/sales-invoices").then((r) => r.json()),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: any }) => {
+      const res = await fetch(`/api/sales-invoices/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error("Update failed");
+      return res.json();
+    },
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      setSelectedInvoice(updated);
+      setIsEditing(false);
+      toast({ title: "Invoice updated" });
+    },
+    onError: () => toast({ title: "Update failed", variant: "destructive" }),
+  });
+
+  const openVaultModal = async (inv: any) => {
+    try {
+      const res = await fetch(`/api/sales-invoices/${inv.id}`);
+      const full = await res.json();
+      setSelectedInvoice(full);
+      setIsVaultModalOpen(true);
+      setIsEditing(false);
+    } catch {
+      toast({ title: "Failed to load invoice", variant: "destructive" });
+    }
+  };
+
+  const startEdit = () => {
+    setEditData({
+      invoiceNumber: selectedInvoice.invoiceNumber,
+      registeredName: selectedInvoice.registeredName,
+      tin: selectedInvoice.tin || "",
+      businessAddress: selectedInvoice.businessAddress || "",
+      status: selectedInvoice.status,
+      paymentMethod: selectedInvoice.paymentMethod,
+      gcashRef: selectedInvoice.gcashRef || "",
+      checkBankName: selectedInvoice.checkBankName || "",
+      checkNumber: selectedInvoice.checkNumber || "",
+      checkMaturityDate: selectedInvoice.checkMaturityDate || "",
+      netDays: selectedInvoice.netDays || "",
+      poNumber: selectedInvoice.poNumber || "",
+      items: (selectedInvoice.items || []).map((it: any) => ({
+        itemDescription: it.itemDescription,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        amount: it.amount,
+      })),
+    });
+    setIsEditing(true);
+  };
+
+  const saveEdit = () => {
+    if (!editData) return;
+    const items = editData.items.map((it: any) => ({
+      ...it,
+      quantity: Number(it.quantity),
+      unitPrice: String(it.unitPrice),
+      amount: String(Number(it.quantity) * Number(it.unitPrice)),
+    }));
+    const total = items.reduce((s: number, i: any) => s + Number(i.amount), 0);
+    const vat = total / 1.12;
+    updateMutation.mutate({
+      id: selectedInvoice.id,
+      data: {
+        ...editData,
+        items,
+        "totalAmount_Due": String(total),
+        vatableSales: String(vat.toFixed(2)),
+        vatAmount: String((total - vat).toFixed(2)),
+      },
+    });
+  };
+
+  const handleVaultReprint = (inv: any) => {
+    setVaultPrintInvoice(inv);
+    setTimeout(() => window.print(), 300);
+  };
+
+  const handleVaultSavePDF = (inv: any) => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageW = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("TRUCKGEAR.IO", margin, 18);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("VAT SALES INVOICE", pageW - margin, 18, { align: "right" });
+    doc.text(`Invoice #: ${inv.invoiceNumber}`, pageW - margin, 24, { align: "right" });
+    doc.text(`Date: ${new Date(inv.date || inv.createdAt).toLocaleDateString("en-PH")}`, pageW - margin, 29, { align: "right" });
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, 32, pageW - margin, 32);
+    doc.setFontSize(9);
+    doc.text(`Sold To: ${inv.registeredName}`, margin, 38);
+    if (inv.tin) doc.text(`TIN: ${inv.tin}`, margin, 43);
+    if (inv.businessAddress) doc.text(`Address: ${inv.businessAddress}`, margin, 48);
+    let startY = inv.businessAddress ? 55 : inv.tin ? 50 : 45;
+    autoTable(doc, {
+      startY,
+      head: [["Description", "Qty", "Unit Price", "Amount"]],
+      body: (inv.items || []).map((it: any) => [
+        it.itemDescription,
+        it.quantity,
+        `₱${Number(it.unitPrice).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+        `₱${Number(it.amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+      ]),
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [37, 99, 235] },
+      columnStyles: { 0: { cellWidth: "auto" }, 1: { cellWidth: 15, halign: "center" }, 2: { cellWidth: 35, halign: "right" }, 3: { cellWidth: 35, halign: "right" } },
+      margin: { left: margin, right: margin },
+    });
+    const finalY = (doc as any).lastAutoTable.finalY + 5;
+    const total = Number(inv.totalAmount_Due || 0);
+    const vatAmt = Number(inv.vatAmount || 0);
+    const vatSales = Number(inv.vatableSales || 0);
+    doc.setFontSize(9);
+    doc.text(`VATable Sales: ₱${vatSales.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, pageW - margin, finalY, { align: "right" });
+    doc.text(`VAT Amount (12%): ₱${vatAmt.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, pageW - margin, finalY + 5, { align: "right" });
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setFillColor(255, 220, 50);
+    doc.rect(pageW - margin - 70, finalY + 8, 70, 10, "F");
+    doc.text(`TOTAL DUE: ₱${total.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`, pageW - margin - 2, finalY + 15, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Payment Method: ${inv.paymentMethod?.replace("_", " ") || "CASH"}  |  Status: ${inv.status}`, margin, finalY + 20);
+    doc.save(`Invoice_${inv.invoiceNumber}_${new Date().toISOString().split("T")[0]}.pdf`);
+  };
+
+  const filteredVaultInvoices = vaultInvoices.filter((inv) => {
+    const matchSearch = !vaultSearch || inv.invoiceNumber?.toLowerCase().includes(vaultSearch.toLowerCase()) || inv.registeredName?.toLowerCase().includes(vaultSearch.toLowerCase());
+    const matchStatus = vaultStatusFilter === "ALL" || inv.status === vaultStatusFilter;
+    return matchSearch && matchStatus;
+  });
 
   // INVENTORY QUERY
   const { data: productsData } = useQuery<Product[]>({
@@ -227,7 +392,104 @@ export default function POS() {
             </div>
           </div>
 
+          {/* ── Tab Switcher ── */}
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+            {[
+              { key: "new", label: "New Invoice", icon: FileText },
+              { key: "vault", label: "Invoice Vault", icon: Archive },
+            ].map(({ key, label, icon: Icon }) => (
+              <button key={key} onClick={() => setPosTab(key as any)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${posTab === key ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                <Icon className="h-4 w-4" />{label}
+                {key === "vault" && vaultInvoices.length > 0 && (
+                  <span className="ml-1 bg-blue-100 text-blue-700 rounded-full text-xs px-2">{vaultInvoices.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Invoice Vault Tab ── */}
+          {posTab === "vault" && (
+            <div className="space-y-4">
+              {/* Search + Filter Bar */}
+              <div className="flex gap-3 items-center">
+                <div className="relative flex-1 max-w-md">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Search invoice # or customer..."
+                    value={vaultSearch}
+                    onChange={(e) => setVaultSearch(e.target.value)}
+                  />
+                </div>
+                <select
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none"
+                  value={vaultStatusFilter}
+                  onChange={(e) => setVaultStatusFilter(e.target.value)}
+                >
+                  {["ALL", "PAID", "UNPAID", "BILLED"].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                <button onClick={() => refetchVault()}
+                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                  Refresh
+                </button>
+              </div>
+
+              {/* Invoice Table */}
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-bold text-gray-600 text-xs uppercase">Invoice #</th>
+                      <th className="text-left px-4 py-3 font-bold text-gray-600 text-xs uppercase">Customer</th>
+                      <th className="text-left px-4 py-3 font-bold text-gray-600 text-xs uppercase">Date</th>
+                      <th className="text-left px-4 py-3 font-bold text-gray-600 text-xs uppercase">Method</th>
+                      <th className="text-left px-4 py-3 font-bold text-gray-600 text-xs uppercase">Status</th>
+                      <th className="text-right px-4 py-3 font-bold text-gray-600 text-xs uppercase">Total</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredVaultInvoices.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-12 text-gray-400">No invoices found.</td>
+                      </tr>
+                    ) : filteredVaultInvoices.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-blue-50 transition-colors cursor-pointer"
+                        onClick={() => openVaultModal(inv)}>
+                        <td className="px-4 py-3 font-mono font-bold text-blue-700">{inv.invoiceNumber}</td>
+                        <td className="px-4 py-3 text-gray-800">{inv.registeredName}</td>
+                        <td className="px-4 py-3 text-gray-500">{new Date(inv.date || inv.createdAt).toLocaleDateString("en-PH")}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${inv.paymentMethod === "CASH" ? "bg-green-100 text-green-700" : inv.paymentMethod === "GCASH" ? "bg-blue-100 text-blue-700" : inv.paymentMethod === "CHECK" ? "bg-purple-100 text-purple-700" : "bg-amber-100 text-amber-700"}`}>
+                            {inv.paymentMethod?.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${inv.status === "PAID" ? "bg-emerald-100 text-emerald-700" : inv.status === "UNPAID" ? "bg-red-100 text-red-700" : inv.status === "BILLED" ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-700"}`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">
+                          ₱{Number(inv.totalAmount_Due || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button className="text-blue-600 hover:text-blue-800 font-medium text-xs underline" onClick={(e) => { e.stopPropagation(); openVaultModal(inv); }}>
+                            Open
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* --- ORIGINAL FORM SECTION (UNTOUCHED) --- */}
+          {posTab === "new" && <>
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 grid grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
@@ -544,7 +806,294 @@ export default function POS() {
               </div>
             </div>
           </div>
+          </>}
         </div>
+
+        {/* ── INVOICE VAULT MODAL ── */}
+        {isVaultModalOpen && selectedInvoice && (
+          <div className="fixed inset-0 bg-black/70 z-[300] flex items-start justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Invoice #{isEditing ? editData?.invoiceNumber : selectedInvoice.invoiceNumber}</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">{new Date(selectedInvoice.date || selectedInvoice.createdAt).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isEditing ? (
+                    <>
+                      <button onClick={startEdit}
+                        className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-medium hover:bg-amber-100">
+                        <Pencil className="h-4 w-4" /> Edit
+                      </button>
+                      <button onClick={() => handleVaultReprint(selectedInvoice)}
+                        className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200">
+                        <Printer className="h-4 w-4" /> Reprint
+                      </button>
+                      <button onClick={() => handleVaultSavePDF(selectedInvoice)}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
+                        <Download className="h-4 w-4" /> Save PDF
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={saveEdit} disabled={updateMutation.isPending}
+                        className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50">
+                        {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Save Changes
+                      </button>
+                      <button onClick={() => setIsEditing(false)}
+                        className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200">
+                        <X className="h-4 w-4" /> Cancel
+                      </button>
+                    </>
+                  )}
+                  <button onClick={() => { setIsVaultModalOpen(false); setIsEditing(false); }}
+                    className="ml-2 p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 space-y-5">
+                {/* Customer Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Registered Name</label>
+                    {isEditing ? (
+                      <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.registeredName}
+                        onChange={(e) => setEditData({ ...editData, registeredName: e.target.value })} />
+                    ) : <p className="text-sm font-semibold text-gray-800">{selectedInvoice.registeredName}</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">TIN</label>
+                    {isEditing ? (
+                      <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.tin}
+                        onChange={(e) => setEditData({ ...editData, tin: e.target.value })} />
+                    ) : <p className="text-sm text-gray-700">{selectedInvoice.tin || "—"}</p>}
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Business Address</label>
+                    {isEditing ? (
+                      <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.businessAddress}
+                        onChange={(e) => setEditData({ ...editData, businessAddress: e.target.value })} />
+                    ) : <p className="text-sm text-gray-700">{selectedInvoice.businessAddress || "—"}</p>}
+                  </div>
+                </div>
+
+                {/* Payment + Status */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Payment Method</label>
+                    {isEditing ? (
+                      <select className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.paymentMethod}
+                        onChange={(e) => setEditData({ ...editData, paymentMethod: e.target.value })}>
+                        {["CASH", "GCASH", "CHECK", "NET_DAYS"].map((m) => <option key={m} value={m}>{m.replace("_", " ")}</option>)}
+                      </select>
+                    ) : (
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${selectedInvoice.paymentMethod === "CASH" ? "bg-green-100 text-green-700" : selectedInvoice.paymentMethod === "GCASH" ? "bg-blue-100 text-blue-700" : selectedInvoice.paymentMethod === "CHECK" ? "bg-purple-100 text-purple-700" : "bg-amber-100 text-amber-700"}`}>
+                        {selectedInvoice.paymentMethod?.replace("_", " ")}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Status</label>
+                    {isEditing ? (
+                      <select className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.status}
+                        onChange={(e) => setEditData({ ...editData, status: e.target.value })}>
+                        {["PAID", "UNPAID", "BILLED"].map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    ) : (
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${selectedInvoice.status === "PAID" ? "bg-emerald-100 text-emerald-700" : selectedInvoice.status === "UNPAID" ? "bg-red-100 text-red-700" : "bg-indigo-100 text-indigo-700"}`}>
+                        {selectedInvoice.status}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Invoice #</label>
+                    {isEditing ? (
+                      <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.invoiceNumber}
+                        onChange={(e) => setEditData({ ...editData, invoiceNumber: e.target.value })} />
+                    ) : <p className="text-sm font-mono font-bold text-blue-700">{selectedInvoice.invoiceNumber}</p>}
+                  </div>
+                </div>
+
+                {/* Payment-specific fields */}
+                {isEditing && editData.paymentMethod === "GCASH" && (
+                  <div><label className="text-xs font-bold uppercase text-gray-500 mb-1 block">GCash Ref #</label>
+                    <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.gcashRef}
+                      onChange={(e) => setEditData({ ...editData, gcashRef: e.target.value })} />
+                  </div>
+                )}
+                {isEditing && editData.paymentMethod === "CHECK" && (
+                  <div className="grid grid-cols-3 gap-4">
+                    <div><label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Bank</label>
+                      <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.checkBankName}
+                        onChange={(e) => setEditData({ ...editData, checkBankName: e.target.value })} />
+                    </div>
+                    <div><label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Check #</label>
+                      <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.checkNumber}
+                        onChange={(e) => setEditData({ ...editData, checkNumber: e.target.value })} />
+                    </div>
+                    <div><label className="text-xs font-bold uppercase text-gray-500 mb-1 block">Maturity Date</label>
+                      <input type="date" className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.checkMaturityDate}
+                        onChange={(e) => setEditData({ ...editData, checkMaturityDate: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+                {isEditing && editData.paymentMethod === "NET_DAYS" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className="text-xs font-bold uppercase text-gray-500 mb-1 block">NET Days</label>
+                      <input type="number" className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.netDays}
+                        onChange={(e) => setEditData({ ...editData, netDays: e.target.value })} />
+                    </div>
+                    <div><label className="text-xs font-bold uppercase text-gray-500 mb-1 block">PO Number</label>
+                      <input className="w-full border rounded-lg px-3 py-2 text-sm" value={editData.poNumber}
+                        onChange={(e) => setEditData({ ...editData, poNumber: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Line Items */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-bold uppercase text-gray-500">Line Items</label>
+                    {isEditing && (
+                      <button onClick={() => setEditData({ ...editData, items: [...editData.items, { itemDescription: "", quantity: 1, unitPrice: "0", amount: "0" }] })}
+                        className="flex items-center gap-1 text-xs text-blue-600 font-medium hover:underline">
+                        <Plus className="h-3.5 w-3.5" /> Add Row
+                      </button>
+                    )}
+                  </div>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="text-left px-3 py-2 text-xs font-bold text-gray-500 uppercase">Description</th>
+                          <th className="text-center px-3 py-2 text-xs font-bold text-gray-500 uppercase w-16">Qty</th>
+                          <th className="text-right px-3 py-2 text-xs font-bold text-gray-500 uppercase w-28">Unit Price</th>
+                          <th className="text-right px-3 py-2 text-xs font-bold text-gray-500 uppercase w-28">Amount</th>
+                          {isEditing && <th className="w-8"></th>}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {(isEditing ? editData.items : selectedInvoice.items || []).map((it: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className="px-3 py-2">
+                              {isEditing ? (
+                                <input className="w-full border-0 bg-transparent text-sm focus:ring-1 focus:ring-blue-300 rounded px-1" value={it.itemDescription}
+                                  onChange={(e) => {
+                                    const items = [...editData.items]; items[idx] = { ...items[idx], itemDescription: e.target.value };
+                                    setEditData({ ...editData, items });
+                                  }} />
+                              ) : <span className="text-gray-800">{it.itemDescription}</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              {isEditing ? (
+                                <input type="number" className="w-full border-0 bg-transparent text-sm text-center focus:ring-1 focus:ring-blue-300 rounded" value={it.quantity}
+                                  onChange={(e) => {
+                                    const items = [...editData.items]; items[idx] = { ...items[idx], quantity: e.target.value, amount: String(Number(e.target.value) * Number(items[idx].unitPrice)) };
+                                    setEditData({ ...editData, items });
+                                  }} />
+                              ) : it.quantity}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {isEditing ? (
+                                <input type="number" className="w-full border-0 bg-transparent text-sm text-right focus:ring-1 focus:ring-blue-300 rounded" value={it.unitPrice}
+                                  onChange={(e) => {
+                                    const items = [...editData.items]; items[idx] = { ...items[idx], unitPrice: e.target.value, amount: String(Number(items[idx].quantity) * Number(e.target.value)) };
+                                    setEditData({ ...editData, items });
+                                  }} />
+                              ) : `₱${Number(it.unitPrice).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`}
+                            </td>
+                            <td className="px-3 py-2 text-right font-mono font-bold text-gray-800">
+                              ₱{Number(isEditing ? it.amount : it.amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                            </td>
+                            {isEditing && (
+                              <td className="px-2 py-2">
+                                <button onClick={() => { const items = editData.items.filter((_: any, i: number) => i !== idx); setEditData({ ...editData, items }); }}
+                                  className="text-red-400 hover:text-red-600">
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Totals */}
+                <div className="flex justify-end">
+                  <div className="text-sm space-y-1 text-right min-w-[220px]">
+                    <div className="flex justify-between gap-8 text-gray-600">
+                      <span>VATable Sales</span>
+                      <span className="font-mono">₱{Number(isEditing ? (editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) / 1.12) : (selectedInvoice.vatableSales || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between gap-8 text-gray-600">
+                      <span>VAT (12%)</span>
+                      <span className="font-mono">₱{Number(isEditing ? (editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) - editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) / 1.12) : (selectedInvoice.vatAmount || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between gap-8 font-black text-lg border-t pt-2 bg-yellow-50 px-3 py-2 rounded-lg">
+                      <span>TOTAL DUE</span>
+                      <span className="font-mono text-blue-700">
+                        ₱{Number(isEditing ? editData.items.reduce((s: number, i: any) => s + Number(i.amount), 0) : (selectedInvoice.totalAmount_Due || 0)).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── VAULT REPRINT AREA (hidden, only visible when printing) ── */}
+        {vaultPrintInvoice && (
+          <div id="vault-print-area" className="hidden print:block font-sans text-black text-sm p-8">
+            <div className="text-center mb-6">
+              <h1 className="text-2xl font-black">TRUCKGEAR.IO</h1>
+              <p className="text-sm text-gray-600">VAT SALES INVOICE</p>
+              <p className="text-sm font-bold mt-1">Invoice # {vaultPrintInvoice.invoiceNumber}</p>
+              <p className="text-xs text-gray-500">{new Date(vaultPrintInvoice.date || vaultPrintInvoice.createdAt).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" })}</p>
+            </div>
+            <div className="mb-4 space-y-1 text-sm">
+              <p><span className="font-bold">Sold To:</span> {vaultPrintInvoice.registeredName}</p>
+              {vaultPrintInvoice.tin && <p><span className="font-bold">TIN:</span> {vaultPrintInvoice.tin}</p>}
+              {vaultPrintInvoice.businessAddress && <p><span className="font-bold">Address:</span> {vaultPrintInvoice.businessAddress}</p>}
+            </div>
+            <table className="w-full border-collapse mb-4 text-sm">
+              <thead>
+                <tr className="border-y-2 border-black">
+                  <th className="text-left py-2">Description</th>
+                  <th className="text-center py-2 w-16">Qty</th>
+                  <th className="text-right py-2 w-28">Unit Price</th>
+                  <th className="text-right py-2 w-28">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(vaultPrintInvoice.items || []).map((it: any, i: number) => (
+                  <tr key={i} className="border-b border-gray-200">
+                    <td className="py-1">{it.itemDescription}</td>
+                    <td className="py-1 text-center">{it.quantity}</td>
+                    <td className="py-1 text-right">₱{Number(it.unitPrice).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                    <td className="py-1 text-right font-bold">₱{Number(it.amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="text-right space-y-1 text-sm">
+              <p>VATable Sales: ₱{Number(vaultPrintInvoice.vatableSales || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+              <p>VAT Amount (12%): ₱{Number(vaultPrintInvoice.vatAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+              <p className="font-black text-xl mt-2 bg-yellow-200 inline-block px-4 py-1 rounded">
+                TOTAL DUE: ₱{Number(vaultPrintInvoice.totalAmount_Due || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="mt-6 text-xs text-gray-500 border-t pt-3">
+              Payment Method: {vaultPrintInvoice.paymentMethod?.replace("_", " ")} | Status: {vaultPrintInvoice.status}
+            </div>
+          </div>
+        )}
 
         {/* MODALS: EXPENSE & CLOSE DRAWER */}
         {isExpenseModalOpen && (

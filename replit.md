@@ -89,6 +89,8 @@ client/src/
 - `/api/auth/register` (POST), `/api/auth/login` (POST), `/api/auth/user` (GET), `/api/auth/logout` (POST)
 - `/api/vat-invoices` (POST) - create VAT invoice with payment method data
 - `/api/sales-invoices` (GET, ?status=, ?paymentMethod=, ?registeredName=) - list invoices with filters
+- `/api/sales-invoices/:id` (GET) - get single invoice with line items
+- `/api/sales-invoices/:id` (PUT) - update invoice header + replace line items
 - `/api/sales-invoices/bulk-status` (PATCH) - bulk update invoice status (e.g. mark as BILLED)
 - `/api/accounts-payable` (GET, POST), `/api/accounts-payable/:id` (PUT), `/api/accounts-payable/:id/receive` (POST)
 - `/api/counter-receipts` (GET, POST), `/api/counter-receipts/:id` (GET)
