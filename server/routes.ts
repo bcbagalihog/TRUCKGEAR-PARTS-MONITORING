@@ -667,6 +667,18 @@ export async function registerRoutes(
   });
 
   // --- Admin: User Management ---
+  // --- Supplier Checks Report ---
+  app.get("/api/supplier-checks-report", isAuthenticated, async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+      const data = await storage.getSupplierChecksReport(startDate, endDate);
+      res.json(data);
+    } catch (e) {
+      console.error("supplier-checks-report error:", e);
+      res.status(500).json({ message: "Failed to fetch supplier checks report" });
+    }
+  });
+
   app.get("/api/admin/users", isAuthenticated, async (req, res) => {
     try {
       const users = await storage.getAllUsers();

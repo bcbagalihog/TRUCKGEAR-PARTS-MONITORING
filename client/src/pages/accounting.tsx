@@ -324,6 +324,46 @@ export default function Accounting() {
   const [pmAmount, setPmAmount] = useState("");
   const [isSavingPayment, setIsSavingPayment] = useState(false);
 
+  // ── Supplier Check Summary ────────────────────────────────────────────────
+  const [supplierChecks, setSupplierChecks] = useState<any[]>([]);
+  const [isLoadingSupplierChecks, setIsLoadingSupplierChecks] = useState(false);
+  const [checkPeriod, setCheckPeriod] = useState<"today" | "week" | "month" | "custom">("month");
+  const [checkGroupBy, setCheckGroupBy] = useState<"none" | "supplier" | "date" | "amount">("supplier");
+  const today = new Date().toISOString().split("T")[0];
+  const [checkCustomStart, setCheckCustomStart] = useState(today);
+  const [checkCustomEnd, setCheckCustomEnd] = useState(today);
+
+  const getDateRange = (period: "today" | "week" | "month" | "custom"): { start: string; end: string } => {
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().split("T")[0];
+    if (period === "today") return { start: fmt(now), end: fmt(now) };
+    if (period === "week") {
+      const s = new Date(now); s.setDate(now.getDate() - 6);
+      return { start: fmt(s), end: fmt(now) };
+    }
+    if (period === "month") {
+      const s = new Date(now); s.setDate(1);
+      return { start: fmt(s), end: fmt(now) };
+    }
+    return { start: checkCustomStart, end: checkCustomEnd };
+  };
+
+  const fetchSupplierChecks = async (period?: "today" | "week" | "month" | "custom") => {
+    const p = period || checkPeriod;
+    const { start, end } = getDateRange(p);
+    setIsLoadingSupplierChecks(true);
+    try {
+      const params = new URLSearchParams({ startDate: start, endDate: end });
+      const res = await fetch(`/api/supplier-checks-report?${params}`);
+      const data = await res.json();
+      setSupplierChecks(Array.isArray(data) ? data : []);
+    } catch {
+      setSupplierChecks([]);
+    } finally {
+      setIsLoadingSupplierChecks(false);
+    }
+  };
+
   const fetchCheckSummary = () => {
     setIsLoadingChecks(true);
     fetch("/api/sales-invoices?paymentMethod=CHECK")
@@ -481,7 +521,10 @@ export default function Accounting() {
   }, [activeTab, isLocked]);
 
   useEffect(() => {
-    if (!isLocked && activeTab === "receipt") fetchCrVault(showArchivedCr);
+    if (!isLocked && activeTab === "receipt") {
+      fetchCrVault(showArchivedCr);
+      fetchSupplierChecks(checkPeriod);
+    }
   }, [activeTab, isLocked]);
 
   useEffect(() => {
@@ -1523,6 +1566,167 @@ export default function Accounting() {
           </div>
         </div>
       )}
+
+      {/* ══ SUPPLIER CHECK SUMMARY (inside receipt tab) ══════════════════════ */}
+      {activeTab === "receipt" && (() => {
+        // Group the supplierChecks data client-side based on checkGroupBy
+        const grandTotal = supplierChecks.reduce((s, c) => s + Number(c.amount), 0);
+
+        const renderRows = (rows: any[]) => rows.map((c) => (
+          <tr key={c.checkId} className="hover:bg-gray-50 transition-colors text-sm">
+            <td className="px-4 py-2.5 text-gray-600 text-xs">{c.checkDate ? new Date(c.checkDate + "T00:00:00").toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) : "—"}</td>
+            <td className="px-4 py-2.5 font-medium text-gray-800">{c.vendorName}</td>
+            <td className="px-4 py-2.5 text-gray-600">{c.bank || "—"}</td>
+            <td className="px-4 py-2.5 font-mono text-indigo-700 font-semibold">{c.checkNo || "—"}</td>
+            <td className="px-4 py-2.5 text-right font-bold text-gray-900">₱{Number(c.amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+          </tr>
+        ));
+
+        let groupedContent: JSX.Element | null = null;
+        if (checkGroupBy === "none") {
+          groupedContent = (
+            <tbody className="divide-y divide-gray-100">
+              {supplierChecks.length === 0
+                ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No checks found for the selected period.</td></tr>
+                : renderRows(supplierChecks)}
+            </tbody>
+          );
+        } else {
+          const groupKey = checkGroupBy === "supplier" ? "vendorName" : checkGroupBy === "date" ? "checkDate" : "amount";
+          const groups = new Map<string, any[]>();
+          supplierChecks.forEach((c) => {
+            const key = checkGroupBy === "amount"
+              ? (Number(c.amount) >= 100000 ? "≥ ₱100,000" : Number(c.amount) >= 50000 ? "₱50,000–₱99,999" : Number(c.amount) >= 10000 ? "₱10,000–₱49,999" : "< ₱10,000")
+              : (c[groupKey] || "Unknown");
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key)!.push(c);
+          });
+          groupedContent = (
+            <tbody className="divide-y divide-gray-100">
+              {groups.size === 0
+                ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No checks found for the selected period.</td></tr>
+                : Array.from(groups.entries()).map(([groupLabel, rows]) => {
+                  const subtotal = rows.reduce((s, c) => s + Number(c.amount), 0);
+                  return (
+                    <>
+                      <tr key={`hdr-${groupLabel}`} className="bg-indigo-50 border-t border-indigo-100">
+                        <td colSpan={4} className="px-4 py-2 text-xs font-bold text-indigo-700 uppercase tracking-wider">
+                          {checkGroupBy === "date" && groupLabel !== "Unknown"
+                            ? new Date(groupLabel + "T00:00:00").toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric" })
+                            : groupLabel}
+                          <span className="ml-2 text-indigo-400 font-normal">({rows.length} check{rows.length !== 1 ? "s" : ""})</span>
+                        </td>
+                        <td className="px-4 py-2 text-right font-bold text-indigo-800 text-sm">₱{subtotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                      {renderRows(rows)}
+                    </>
+                  );
+                })}
+            </tbody>
+          );
+        }
+
+        return (
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                  <CheckSquare className="h-4 w-4 text-indigo-600" /> Supplier Check Summary
+                  {supplierChecks.length > 0 && <span className="bg-indigo-100 text-indigo-700 rounded-full text-xs px-2 py-0.5">{supplierChecks.length}</span>}
+                </h3>
+                <button onClick={() => fetchSupplierChecks()} disabled={isLoadingSupplierChecks}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium">
+                  {isLoadingSupplierChecks ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Refresh
+                </button>
+              </div>
+
+              {/* Period Filter */}
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Period</p>
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                    {(["today", "week", "month", "custom"] as const).map((p) => (
+                      <button key={p} data-testid={`button-check-period-${p}`}
+                        onClick={() => { setCheckPeriod(p); if (p !== "custom") fetchSupplierChecks(p); }}
+                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${checkPeriod === p ? "bg-indigo-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                        {p === "today" ? "Today" : p === "week" ? "This Week" : p === "month" ? "This Month" : "Custom"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {checkPeriod === "custom" && (
+                  <>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 mb-1.5">From</p>
+                      <input type="date" data-testid="input-check-start"
+                        className="border border-gray-200 rounded-md px-3 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={checkCustomStart} onChange={(e) => setCheckCustomStart(e.target.value)} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 mb-1.5">To</p>
+                      <input type="date" data-testid="input-check-end"
+                        className="border border-gray-200 rounded-md px-3 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={checkCustomEnd} onChange={(e) => setCheckCustomEnd(e.target.value)} />
+                    </div>
+                    <button onClick={() => fetchSupplierChecks("custom")}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-md text-xs font-bold">
+                      Apply
+                    </button>
+                  </>
+                )}
+
+                {/* Group By */}
+                <div className="ml-auto">
+                  <p className="text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Group By</p>
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                    {(["none", "supplier", "date", "amount"] as const).map((g) => (
+                      <button key={g} data-testid={`button-check-group-${g}`}
+                        onClick={() => setCheckGroupBy(g)}
+                        className={`px-3 py-1.5 text-xs font-semibold transition-colors ${checkGroupBy === g ? "bg-gray-700 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+                        {g === "none" ? "None" : g === "supplier" ? "Supplier" : g === "date" ? "Date" : "Amount"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Table */}
+            {isLoadingSupplierChecks ? (
+              <div className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></div>
+            ) : (
+              <div className="overflow-x-auto" id="supplier-check-summary-print">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b text-xs uppercase tracking-wider text-gray-500 font-bold">
+                      <th className="px-4 py-2.5 text-left">Check Date</th>
+                      <th className="px-4 py-2.5 text-left">Supplier</th>
+                      <th className="px-4 py-2.5 text-left">Bank</th>
+                      <th className="px-4 py-2.5 text-left">Check No.</th>
+                      <th className="px-4 py-2.5 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  {groupedContent}
+                  {supplierChecks.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-yellow-50 border-t-2 border-yellow-200">
+                        <td colSpan={4} className="px-4 py-2.5 text-right font-bold text-yellow-800 text-sm">
+                          GRAND TOTAL ({supplierChecks.length} check{supplierChecks.length !== 1 ? "s" : ""})
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-bold text-yellow-900 text-sm">
+                          ₱{grandTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ══ CHECK SUMMARY TAB ═══════════════════════════════════════════════ */}
       {activeTab === "checks" && (

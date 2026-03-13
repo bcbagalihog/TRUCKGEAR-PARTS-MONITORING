@@ -97,6 +97,7 @@ export interface IStorage extends IAuthStorage {
   getBillingCollectionById(id: number): Promise<(BillingCollection & { items: BillingCollectionItem[]; payments: BillingCollectionPayment[] }) | null>;
   addBillingCollectionPayment(billingCollectionId: number, data: { paymentDate: string; refNo?: string; amount: string }): Promise<BillingCollectionPayment>;
   updateBillingCollectionStatus(id: number, status: string): Promise<void>;
+  getSupplierChecksReport(startDate?: string, endDate?: string): Promise<{ checkId: number; counterReceiptId: number; vendorName: string; checkNo: string | null; bank: string | null; checkDate: string | null; amount: string }[]>;
 
   // Admin Users
   getAllUsers(): Promise<any[]>;
@@ -806,6 +807,24 @@ export class DatabaseStorage implements IStorage {
         isActive: users.isActive,
       });
     return user;
+  }
+
+  async getSupplierChecksReport(startDate?: string, endDate?: string): Promise<{ checkId: number; counterReceiptId: number; vendorName: string; checkNo: string | null; bank: string | null; checkDate: string | null; amount: string }[]> {
+    const checks = await db.select().from(counterReceiptChecks);
+    const receipts = await db.select().from(counterReceipts);
+    const receiptMap = new Map(receipts.map(r => [r.id, r.vendorName]));
+    let rows = checks.map(c => ({
+      checkId: c.id,
+      counterReceiptId: c.counterReceiptId,
+      vendorName: receiptMap.get(c.counterReceiptId) || "Unknown",
+      checkNo: c.checkNo,
+      bank: c.bank,
+      checkDate: c.checkDate,
+      amount: c.amount,
+    }));
+    if (startDate) rows = rows.filter(r => r.checkDate && r.checkDate >= startDate);
+    if (endDate) rows = rows.filter(r => r.checkDate && r.checkDate <= endDate);
+    return rows.sort((a, b) => (b.checkDate || "").localeCompare(a.checkDate || ""));
   }
 }
 
