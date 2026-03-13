@@ -564,6 +564,27 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/counter-receipts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const { receipt, checks } = req.body as { receipt: any; checks: any[] };
+      const updated = await storage.updateCounterReceipt(Number(req.params.id), receipt, checks || []);
+      res.json(updated);
+    } catch (e) {
+      console.error("counter-receipts update error:", e);
+      res.status(500).json({ message: "Failed to update counter receipt" });
+    }
+  });
+
+  app.delete("/api/counter-receipts/:id", isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteCounterReceipt(Number(req.params.id));
+      res.json({ success: true });
+    } catch (e) {
+      console.error("counter-receipts delete error:", e);
+      res.status(500).json({ message: "Failed to delete counter receipt" });
+    }
+  });
+
   // --- Admin: User Management ---
   app.get("/api/admin/users", isAuthenticated, async (req, res) => {
     try {

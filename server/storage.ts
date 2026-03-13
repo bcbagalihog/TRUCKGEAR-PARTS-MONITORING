@@ -634,6 +634,26 @@ export class DatabaseStorage implements IStorage {
     return { ...receipt, checks, apInvoices };
   }
 
+  async updateCounterReceipt(
+    id: number,
+    data: Partial<InsertCounterReceipt>,
+    checks: InsertCounterReceiptCheck[]
+  ): Promise<CounterReceipt & { checks: CounterReceiptCheck[] }> {
+    const [receipt] = await db.update(counterReceipts).set(data).where(eq(counterReceipts.id, id)).returning();
+    await db.delete(counterReceiptChecks).where(eq(counterReceiptChecks.counterReceiptId, id));
+    const insertedChecks = checks.length > 0
+      ? await db.insert(counterReceiptChecks)
+          .values(checks.map(c => ({ checkNo: c.checkNo, bank: c.bank, checkDate: c.checkDate, amount: c.amount, counterReceiptId: id })))
+          .returning()
+      : [];
+    return { ...receipt, checks: insertedChecks };
+  }
+
+  async deleteCounterReceipt(id: number): Promise<void> {
+    await db.delete(counterReceiptChecks).where(eq(counterReceiptChecks.counterReceiptId, id));
+    await db.delete(counterReceipts).where(eq(counterReceipts.id, id));
+  }
+
   // --- ADMIN USERS ---
   async getAllUsers(): Promise<any[]> {
     const allUsers = await db.select({

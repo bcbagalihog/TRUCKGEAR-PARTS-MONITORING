@@ -20,6 +20,8 @@ import {
   RefreshCw,
   CalendarDays,
   Zap,
+  Archive,
+  Eye,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
@@ -268,12 +270,81 @@ export default function Accounting() {
   const [isSavingReceipt, setIsSavingReceipt] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
+  // ── Counter Receipt Vault ─────────────────────────────────────────────────
+  const [crVault, setCrVault] = useState<any[]>([]);
+  const [crVaultLoading, setCrVaultLoading] = useState(false);
+  const [viewingReceipt, setViewingReceipt] = useState<any | null>(null);
+  const [editingReceipt, setEditingReceipt] = useState<any | null>(null);
+  const [editingReceiptChecks, setEditingReceiptChecks] = useState<any[]>([]);
+  const [deletingReceipt, setDeletingReceipt] = useState<any | null>(null);
+  const [isDeletingReceipt, setIsDeletingReceipt] = useState(false);
+  const [isSavingReceiptEdit, setIsSavingReceiptEdit] = useState(false);
+
   const fetchCheckSummary = () => {
     setIsLoadingChecks(true);
     fetch("/api/sales-invoices?paymentMethod=CHECK")
       .then((r) => r.json())
       .then((data) => { setCheckSummary(data); setIsLoadingChecks(false); })
       .catch(() => setIsLoadingChecks(false));
+  };
+
+  const fetchCrVault = async () => {
+    setCrVaultLoading(true);
+    try {
+      const res = await fetch("/api/counter-receipts");
+      const data = await res.json();
+      setCrVault(data);
+    } catch {
+      toast({ title: "Error", description: "Failed to load vault.", variant: "destructive" });
+    } finally {
+      setCrVaultLoading(false);
+    }
+  };
+
+  const handleDeleteReceipt = async () => {
+    if (!deletingReceipt?.id) return;
+    setIsDeletingReceipt(true);
+    try {
+      const res = await fetch(`/api/counter-receipts/${deletingReceipt.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setDeletingReceipt(null);
+      fetchCrVault();
+      toast({ title: "Deleted", description: "Counter receipt removed." });
+    } catch {
+      toast({ title: "Error", description: "Failed to delete.", variant: "destructive" });
+    } finally {
+      setIsDeletingReceipt(false);
+    }
+  };
+
+  const handleSaveReceiptEdit = async () => {
+    if (!editingReceipt?.id) return;
+    setIsSavingReceiptEdit(true);
+    try {
+      const totalAmount = editingReceiptChecks.reduce((s, c) => s + Number(c.amount || 0), 0);
+      const res = await fetch(`/api/counter-receipts/${editingReceipt.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          receipt: {
+            vendorName: editingReceipt.vendorName,
+            receiptDate: editingReceipt.receiptDate,
+            refNo: editingReceipt.refNo,
+            totalAmount: String(totalAmount),
+            numberOfChecks: editingReceiptChecks.length,
+          },
+          checks: editingReceiptChecks,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      setEditingReceipt(null);
+      fetchCrVault();
+      toast({ title: "Updated", description: "Counter receipt updated successfully." });
+    } catch {
+      toast({ title: "Error", description: "Failed to update.", variant: "destructive" });
+    } finally {
+      setIsSavingReceiptEdit(false);
+    }
   };
 
   useEffect(() => {
@@ -285,6 +356,10 @@ export default function Accounting() {
 
   useEffect(() => {
     if (!isLocked && activeTab === "checks") fetchCheckSummary();
+  }, [activeTab, isLocked]);
+
+  useEffect(() => {
+    if (!isLocked && activeTab === "receipt") fetchCrVault();
   }, [activeTab, isLocked]);
 
   useEffect(() => {
@@ -1026,6 +1101,88 @@ export default function Accounting() {
               <p className="text-xs text-gray-400 mt-3">Fetch pending invoices in Step 1 first to enable saving.</p>
             )}
           </div>
+
+          {/* ── Counter Receipt Vault ── */}
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                <Archive className="h-4 w-4 text-indigo-600" /> Counter Receipt Vault
+                {crVault.length > 0 && (
+                  <span className="bg-indigo-100 text-indigo-700 rounded-full text-xs px-2 py-0.5">{crVault.length}</span>
+                )}
+              </h3>
+              <button onClick={fetchCrVault} disabled={crVaultLoading}
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium">
+                {crVaultLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Refresh
+              </button>
+            </div>
+            {crVaultLoading ? (
+              <div className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></div>
+            ) : crVault.length === 0 ? (
+              <div className="py-10 text-center text-gray-400 text-sm">No saved counter receipts yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b text-xs uppercase tracking-wider text-gray-500 font-bold">
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Vendor</th>
+                      <th className="px-4 py-2 text-left">Ref No.</th>
+                      <th className="px-4 py-2 text-center">Checks</th>
+                      <th className="px-4 py-2 text-right">Total</th>
+                      <th className="px-4 py-2 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {crVault.map((cr) => (
+                      <tr key={cr.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-gray-600 text-xs">
+                          {cr.receiptDate ? new Date(cr.receiptDate).toLocaleDateString("en-PH") : "-"}
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-800">{cr.vendorName}</td>
+                        <td className="px-4 py-3 text-gray-500 font-mono text-xs">{cr.refNo || "-"}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                            {cr.checks?.length ?? cr.numberOfChecks}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-gray-900">
+                          ₱{Number(cr.totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button onClick={() => setViewingReceipt(cr)} title="View"
+                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
+                              <Eye className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => { setEditingReceipt({ ...cr }); setEditingReceiptChecks(cr.checks ? [...cr.checks] : []); }} title="Edit"
+                              className="p-1 text-gray-400 hover:text-amber-600 transition-colors">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button onClick={() => setDeletingReceipt(cr)} title="Delete"
+                              className="p-1 text-gray-400 hover:text-red-600 transition-colors">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t border-gray-200">
+                      <td colSpan={4} className="px-4 py-2 text-xs font-bold text-gray-500 uppercase">
+                        Total ({crVault.length} receipts)
+                      </td>
+                      <td className="px-4 py-2 text-right font-bold text-gray-900">
+                        ₱{crVault.reduce((s, cr) => s + Number(cr.totalAmount || 0), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1146,6 +1303,209 @@ export default function Accounting() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── VIEW COUNTER RECEIPT MODAL ── */}
+      {viewingReceipt && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Supplier Counter Receipt</h2>
+                <p className="text-sm text-gray-500">{viewingReceipt.vendorName} · {viewingReceipt.receiptDate ? new Date(viewingReceipt.receiptDate).toLocaleDateString("en-PH", { year: "numeric", month: "long", day: "numeric" }) : ""}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setEditingReceipt({ ...viewingReceipt }); setEditingReceiptChecks(viewingReceipt.checks ? [...viewingReceipt.checks] : []); setViewingReceipt(null); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-medium hover:bg-amber-100">
+                  <Pencil className="h-4 w-4" /> Edit
+                </button>
+                <button onClick={() => { setDeletingReceipt(viewingReceipt); setViewingReceipt(null); }}
+                  className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-medium hover:bg-red-100">
+                  <Trash2 className="h-4 w-4" /> Delete
+                </button>
+                <button onClick={() => setViewingReceipt(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-3 gap-4 bg-gray-50 rounded-xl p-4">
+                <div><p className="text-xs font-bold text-gray-500 uppercase mb-1">Vendor</p><p className="text-sm font-semibold text-gray-800">{viewingReceipt.vendorName}</p></div>
+                <div><p className="text-xs font-bold text-gray-500 uppercase mb-1">Date</p><p className="text-sm font-semibold text-gray-800">{viewingReceipt.receiptDate ? new Date(viewingReceipt.receiptDate).toLocaleDateString("en-PH") : "-"}</p></div>
+                <div><p className="text-xs font-bold text-gray-500 uppercase mb-1">Ref No.</p><p className="text-sm font-mono font-semibold text-gray-800">{viewingReceipt.refNo || "-"}</p></div>
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Check Details</h4>
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b text-xs uppercase text-gray-500 font-bold">
+                        <th className="px-3 py-2 text-left">#</th>
+                        <th className="px-3 py-2 text-left">Bank</th>
+                        <th className="px-3 py-2 text-left">Check No.</th>
+                        <th className="px-3 py-2 text-left">Date</th>
+                        <th className="px-3 py-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {(viewingReceipt.checks || []).map((c: any, i: number) => (
+                        <tr key={i}>
+                          <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                          <td className="px-3 py-2 text-gray-700">{c.bank || "-"}</td>
+                          <td className="px-3 py-2 font-mono text-gray-700">{c.checkNo || "-"}</td>
+                          <td className="px-3 py-2 text-gray-600 text-xs">{c.checkDate ? new Date(c.checkDate).toLocaleDateString("en-PH") : "-"}</td>
+                          <td className="px-3 py-2 text-right font-bold text-gray-900">₱{Number(c.amount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-yellow-50 border-t-2 border-yellow-200">
+                        <td colSpan={4} className="px-3 py-2 text-right text-sm font-bold text-yellow-800">TOTAL</td>
+                        <td className="px-3 py-2 text-right font-bold text-yellow-900">₱{Number(viewingReceipt.totalAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDIT COUNTER RECEIPT MODAL ── */}
+      {editingReceipt && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">Edit Counter Receipt</h2>
+              <button onClick={() => setEditingReceipt(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Vendor Name</label>
+                  <input className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={editingReceipt.vendorName || ""}
+                    onChange={(e) => setEditingReceipt({ ...editingReceipt, vendorName: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Receipt Date</label>
+                  <input type="date" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={editingReceipt.receiptDate || ""}
+                    onChange={(e) => setEditingReceipt({ ...editingReceipt, receiptDate: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Ref No.</label>
+                  <input className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={editingReceipt.refNo || ""}
+                    onChange={(e) => setEditingReceipt({ ...editingReceipt, refNo: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-gray-500 uppercase">Check Details</h4>
+                  <button onClick={() => setEditingReceiptChecks(prev => [...prev, { checkNo: "", bank: "", checkDate: new Date().toISOString().split("T")[0], amount: "" }])}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                    <Plus className="h-3.5 w-3.5" /> Add Check
+                  </button>
+                </div>
+                <div className="rounded-xl border border-gray-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b text-xs uppercase text-gray-500 font-bold">
+                        <th className="px-3 py-2">#</th>
+                        <th className="px-3 py-2">Bank</th>
+                        <th className="px-3 py-2">Check No.</th>
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2">Amount (₱)</th>
+                        <th className="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {editingReceiptChecks.map((c, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-2 text-gray-500 text-center">{i + 1}</td>
+                          <td className="px-3 py-2">
+                            <input className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-400 outline-none"
+                              value={c.bank || ""} onChange={(e) => setEditingReceiptChecks(prev => prev.map((x, j) => j === i ? { ...x, bank: e.target.value } : x))} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input className="w-full border border-gray-200 rounded px-2 py-1 text-xs font-mono focus:ring-1 focus:ring-blue-400 outline-none"
+                              value={c.checkNo || ""} onChange={(e) => setEditingReceiptChecks(prev => prev.map((x, j) => j === i ? { ...x, checkNo: e.target.value } : x))} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="date" className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-400 outline-none"
+                              value={c.checkDate || ""} onChange={(e) => setEditingReceiptChecks(prev => prev.map((x, j) => j === i ? { ...x, checkDate: e.target.value } : x))} />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input type="number" step="0.01" className="w-full border border-gray-200 rounded px-2 py-1 text-xs text-right focus:ring-1 focus:ring-blue-400 outline-none"
+                              value={c.amount || ""} onChange={(e) => setEditingReceiptChecks(prev => prev.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))} />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <button onClick={() => setEditingReceiptChecks(prev => prev.filter((_, j) => j !== i))}
+                              className="text-red-400 hover:text-red-600">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-yellow-50 border-t-2 border-yellow-200">
+                        <td colSpan={4} className="px-3 py-2 text-right text-sm font-bold text-yellow-800">TOTAL</td>
+                        <td className="px-3 py-2 text-right font-bold text-yellow-900">
+                          ₱{editingReceiptChecks.reduce((s, c) => s + Number(c.amount || 0), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setEditingReceipt(null)}
+                  className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50">Cancel</button>
+                <button onClick={handleSaveReceiptEdit} disabled={isSavingReceiptEdit}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                  {isSavingReceiptEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DELETE COUNTER RECEIPT CONFIRMATION ── */}
+      {deletingReceipt && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Delete Counter Receipt</h3>
+                <p className="text-sm text-gray-500">This cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-6">
+              Delete the counter receipt for <span className="font-bold text-gray-900">{deletingReceipt.vendorName}</span> amounting to{" "}
+              <span className="font-bold">₱{Number(deletingReceipt.totalAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeletingReceipt(null)}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50">Cancel</button>
+              <button onClick={handleDeleteReceipt} disabled={isDeletingReceipt}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                {isDeletingReceipt ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
