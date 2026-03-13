@@ -397,19 +397,99 @@ export class DatabaseStorage implements IStorage {
   // --- DASHBOARD ---
   async getDashboardStats(): Promise<any> {
     const [productsCount] = await db.select({ count: sql<number>`count(*)` }).from(products);
-    const [ordersCount] = await db.select({ count: sql<number>`count(*)` }).from(salesOrders).where(eq(salesOrders.status, 'draft'));
-    const [lowStock] = await db.select({ count: sql<number>`count(*)` })
-      .from(products)
-      .where(sql`stock_quantity <= reorder_point`);
+    const [pendingSO] = await db.select({ count: sql<number>`count(*)` }).from(salesOrders).where(eq(salesOrders.status, 'draft'));
+    const [pendingPO] = await db.select({ count: sql<number>`count(*)` }).from(purchaseOrders).where(eq(purchaseOrders.status, 'draft'));
+    const [lowStockRow] = await db.select({ count: sql<number>`count(*)` }).from(products).where(sql`stock_quantity <= reorder_point`);
+    const [totalCustomers] = await db.select({ count: sql<number>`count(*)` }).from(customers);
+    const [totalVendors] = await db.select({ count: sql<number>`count(*)` }).from(vendors);
+
+    // Today's invoices from sales_invoices table
+    const todayInvoices = await db.execute(sql.raw(`
+      SELECT COUNT(*)::int as count, COALESCE(SUM(total_amount_due::numeric), 0) as revenue
+      FROM sales_invoices
+      WHERE DATE(created_at) = CURRENT_DATE
+    `));
+    const todayRow = (todayInvoices as any).rows?.[0] ?? todayInvoices[0] ?? {};
+
+    // Monthly revenue (last 30 days from invoices)
+    const monthlyInvoices = await db.execute(sql.raw(`
+      SELECT COALESCE(SUM(total_amount_due::numeric), 0) as revenue, COUNT(*)::int as count
+      FROM sales_invoices
+      WHERE created_at >= NOW() - INTERVAL '30 days'
+    `));
+    const monthlyRow = (monthlyInvoices as any).rows?.[0] ?? monthlyInvoices[0] ?? {};
+
+    // Unpaid AR total
+    const unpaidAR = await db.execute(sql.raw(`
+      SELECT COALESCE(SUM(total_amount_due::numeric), 0) as total
+      FROM sales_invoices WHERE status = 'UNPAID'
+    `));
+    const unpaidARRow = (unpaidAR as any).rows?.[0] ?? unpaidAR[0] ?? {};
+
+    // 7-day daily revenue for mini chart
+    const weeklyChart = await db.execute(sql.raw(`
+      SELECT to_char(created_at::date, 'Mon DD') as day,
+             COALESCE(SUM(total_amount_due::numeric), 0) as revenue,
+             COUNT(*)::int as count
+      FROM sales_invoices
+      WHERE created_at >= NOW() - INTERVAL '7 days'
+      GROUP BY created_at::date, to_char(created_at::date, 'Mon DD')
+      ORDER BY created_at::date ASC
+    `));
+    const weeklyData = ((weeklyChart as any).rows ?? weeklyChart ?? []).map((r: any) => ({
+      day: r.day,
+      revenue: Number(r.revenue),
+      count: Number(r.count),
+    }));
+
+    // Low stock items with product details
+    const lowStockItems = await db.select({
+      id: products.id,
+      name: products.name,
+      sku: products.sku,
+      stockQuantity: products.stockQuantity,
+      reorderPoint: products.reorderPoint,
+    }).from(products).where(sql`stock_quantity <= reorder_point`).limit(10);
+
+    // Recent invoices from POS
+    const recentInvoices = await db.execute(sql.raw(`
+      SELECT id, invoice_number, registered_name, payment_method, status,
+             total_amount_due, created_at
+      FROM sales_invoices
+      ORDER BY created_at DESC LIMIT 8
+    `));
+    const recentInvoiceRows = ((recentInvoices as any).rows ?? recentInvoices ?? []).map((r: any) => ({
+      id: r.id,
+      invoiceNumber: r.invoice_number,
+      registeredName: r.registered_name,
+      paymentMethod: r.payment_method,
+      status: r.status,
+      totalAmount: Number(r.total_amount_due ?? 0),
+      createdAt: r.created_at,
+    }));
+
+    // Recent sales orders
     const recentSales = await db.query.salesOrders.findMany({
       limit: 5,
       orderBy: [desc(salesOrders.orderDate)],
       with: { customer: true },
     });
+
     return {
       totalProducts: Number(productsCount.count),
-      pendingOrders: Number(ordersCount.count),
-      lowStockCount: Number(lowStock.count),
+      pendingOrders: Number(pendingSO.count),
+      pendingPurchaseOrders: Number(pendingPO.count),
+      lowStockCount: Number(lowStockRow.count),
+      lowStockItems,
+      totalCustomers: Number(totalCustomers.count),
+      totalVendors: Number(totalVendors.count),
+      todayRevenue: Number(todayRow.revenue ?? 0),
+      todayInvoiceCount: Number(todayRow.count ?? 0),
+      monthlyRevenue: Number(monthlyRow.revenue ?? 0),
+      monthlyInvoiceCount: Number(monthlyRow.count ?? 0),
+      unpaidAR: Number(unpaidARRow.total ?? 0),
+      weeklyChart: weeklyData,
+      recentInvoices: recentInvoiceRows,
       recentSales,
     };
   }

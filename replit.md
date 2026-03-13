@@ -14,7 +14,7 @@ A professional inventory management system for an auto supply business. Includes
 - **Sales**: Sales orders with status tracking (Draft → Shipped → Invoiced). Invoicing decreases stock.
 - **Purchases**: Purchase orders with status tracking (Draft → Ordered → Received). Receiving increases stock.
 - **Custom Items**: Sales and purchase orders support non-inventory line items (labor, freight, etc.)
-- **Dashboard**: Low stock alerts, pending orders, recent sales activity
+- **Dashboard**: 8 live KPI cards (today revenue, 30-day revenue, unpaid AR, low stock, products, pending SO/PO, customers), 7-day revenue AreaChart (recharts), Low Stock Alerts panel, Recent POS Invoices panel with payment method/status badges, Quick Action links
 - **Reports**: Activity reports with bar/line charts for sales & purchases (7-day, 30-day, monthly, quarterly, yearly)
 - **Currency**: Philippine Pesos (₱)
 - **Auth**: Custom username/password registration and login with bcrypt password hashing and session-based authentication
