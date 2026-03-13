@@ -61,7 +61,7 @@ export default function Reports() {
       return res.json();
     },
     enabled: activeTab === "business",
-    staleTime: 60000,
+    staleTime: 0,
   });
 
   const mergedData = mergeChartData(activityReport?.sales || [], activityReport?.purchases || []);

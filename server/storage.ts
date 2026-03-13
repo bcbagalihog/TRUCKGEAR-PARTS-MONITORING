@@ -508,25 +508,32 @@ export class DatabaseStorage implements IStorage {
     const intervalDays = config.days;
     const dateFormat = config.fmt;
 
-    const buildQuery = (table: string) => {
-      if (dateFormat === 'YYYY-MM-DD') {
-        return `SELECT to_char(order_date, 'YYYY-MM-DD') as period, COUNT(*)::int as order_count, COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount FROM ${table} WHERE order_date >= NOW() - INTERVAL '${intervalDays} days' GROUP BY to_char(order_date, 'YYYY-MM-DD') ORDER BY period ASC`;
-      } else if (dateFormat === 'YYYY-MM') {
-        return `SELECT to_char(order_date, 'YYYY-MM') as period, COUNT(*)::int as order_count, COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount FROM ${table} WHERE order_date >= NOW() - INTERVAL '${intervalDays} days' GROUP BY to_char(order_date, 'YYYY-MM') ORDER BY period ASC`;
-      } else if (dateFormat === 'YYYY-"Q"Q') {
-        return `SELECT to_char(order_date, 'YYYY-"Q"Q') as period, COUNT(*)::int as order_count, COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount FROM ${table} WHERE order_date >= NOW() - INTERVAL '${intervalDays} days' GROUP BY to_char(order_date, 'YYYY-"Q"Q') ORDER BY period ASC`;
-      } else {
-        return `SELECT to_char(order_date, 'YYYY') as period, COUNT(*)::int as order_count, COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount FROM ${table} WHERE order_date >= NOW() - INTERVAL '${intervalDays} days' GROUP BY to_char(order_date, 'YYYY') ORDER BY period ASC`;
-      }
+    // Sales come from sales_invoices (POS), using created_at and total_amount_due
+    const buildSalesQuery = () => {
+      const dateFmt = dateFormat === 'YYYY-MM-DD' ? `to_char(created_at, 'YYYY-MM-DD')`
+        : dateFormat === 'YYYY-MM'    ? `to_char(created_at, 'YYYY-MM')`
+        : dateFormat === 'YYYY-"Q"Q' ? `to_char(created_at, 'YYYY-"Q"Q')`
+        : `to_char(created_at, 'YYYY')`;
+      return `SELECT ${dateFmt} as period, COUNT(*)::int as order_count, COALESCE(SUM(CAST(total_amount_due AS numeric)), 0) as total_amount FROM sales_invoices WHERE created_at >= NOW() - INTERVAL '${intervalDays} days' GROUP BY ${dateFmt} ORDER BY period ASC`;
     };
 
-    const buildSummaryQuery = (table: string, amountAlias: string) =>
-      `SELECT COUNT(*)::int as total_orders, COALESCE(SUM(CAST(total_amount AS numeric)), 0) as ${amountAlias} FROM ${table} WHERE order_date >= NOW() - INTERVAL '${intervalDays} days'`;
+    // Purchases come from purchase_orders, using order_date and total_amount
+    const buildPurchaseQuery = () => {
+      const dateFmt = dateFormat === 'YYYY-MM-DD' ? `to_char(order_date, 'YYYY-MM-DD')`
+        : dateFormat === 'YYYY-MM'    ? `to_char(order_date, 'YYYY-MM')`
+        : dateFormat === 'YYYY-"Q"Q' ? `to_char(order_date, 'YYYY-"Q"Q')`
+        : `to_char(order_date, 'YYYY')`;
+      return `SELECT ${dateFmt} as period, COUNT(*)::int as order_count, COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_amount FROM purchase_orders WHERE order_date >= NOW() - INTERVAL '${intervalDays} days' GROUP BY ${dateFmt} ORDER BY period ASC`;
+    };
 
-    const salesData = await db.execute(sql.raw(buildQuery('sales_orders')));
-    const purchaseData = await db.execute(sql.raw(buildQuery('purchase_orders')));
-    const salesSummary = await db.execute(sql.raw(buildSummaryQuery('sales_orders', 'total_revenue')));
-    const purchaseSummary = await db.execute(sql.raw(buildSummaryQuery('purchase_orders', 'total_cost')));
+    const salesData     = await db.execute(sql.raw(buildSalesQuery()));
+    const purchaseData  = await db.execute(sql.raw(buildPurchaseQuery()));
+    const salesSummary  = await db.execute(sql.raw(
+      `SELECT COUNT(*)::int as total_orders, COALESCE(SUM(CAST(total_amount_due AS numeric)), 0) as total_revenue FROM sales_invoices WHERE created_at >= NOW() - INTERVAL '${intervalDays} days'`
+    ));
+    const purchaseSummary = await db.execute(sql.raw(
+      `SELECT COUNT(*)::int as total_orders, COALESCE(SUM(CAST(total_amount AS numeric)), 0) as total_cost FROM purchase_orders WHERE order_date >= NOW() - INTERVAL '${intervalDays} days'`
+    ));
 
     return {
       sales: salesData.rows,
