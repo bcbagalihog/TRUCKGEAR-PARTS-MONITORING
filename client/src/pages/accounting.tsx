@@ -304,6 +304,25 @@ export default function Accounting() {
   const [printCheckData, setPrintCheckData] = useState<{ check: CheckLine; payee: string } | null>(null);
   const [isDeletingReceipt, setIsDeletingReceipt] = useState(false);
   const [isSavingReceiptEdit, setIsSavingReceiptEdit] = useState(false);
+  const [showArchivedCr, setShowArchivedCr] = useState(false);
+
+  // ── Billing Collection Vault ──────────────────────────────────────────────
+  const [billingVault, setBillingVault] = useState<any[]>([]);
+  const [billingVaultLoading, setBillingVaultLoading] = useState(false);
+  const [showArchivedBilling, setShowArchivedBilling] = useState(false);
+
+  // ── Customer / Vendor dropdowns ───────────────────────────────────────────
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState<number | null>(null);
+
+  // ── Payment Recording Modal ───────────────────────────────────────────────
+  const [paymentModal, setPaymentModal] = useState<{ type: "cr" | "bc"; id: number; label: string; totalAmount: number; amountPaid: number } | null>(null);
+  const [pmDate, setPmDate] = useState(new Date().toISOString().split("T")[0]);
+  const [pmRef, setPmRef] = useState("");
+  const [pmAmount, setPmAmount] = useState("");
+  const [isSavingPayment, setIsSavingPayment] = useState(false);
 
   const fetchCheckSummary = () => {
     setIsLoadingChecks(true);
@@ -313,16 +332,92 @@ export default function Accounting() {
       .catch(() => setIsLoadingChecks(false));
   };
 
-  const fetchCrVault = async () => {
+  const fetchCrVault = async (archived = showArchivedCr) => {
     setCrVaultLoading(true);
     try {
-      const res = await fetch("/api/counter-receipts");
+      const res = await fetch(`/api/counter-receipts?includeArchived=${archived}`);
       const data = await res.json();
-      setCrVault(data);
+      setCrVault(Array.isArray(data) ? data : []);
     } catch {
+      setCrVault([]);
       toast({ title: "Error", description: "Failed to load vault.", variant: "destructive" });
     } finally {
       setCrVaultLoading(false);
+    }
+  };
+
+  const fetchBillingVault = async (archived = showArchivedBilling) => {
+    setBillingVaultLoading(true);
+    try {
+      const res = await fetch(`/api/billing-collections?includeArchived=${archived}`);
+      const data = await res.json();
+      setBillingVault(Array.isArray(data) ? data : []);
+    } catch {
+      setBillingVault([]);
+      toast({ title: "Error", description: "Failed to load billing vault.", variant: "destructive" });
+    } finally {
+      setBillingVaultLoading(false);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await fetch("/api/customers");
+      const data = await res.json();
+      setCustomers(data);
+    } catch {}
+  };
+
+  const fetchVendors = async () => {
+    try {
+      const res = await fetch("/api/vendors");
+      const data = await res.json();
+      setVendors(data);
+    } catch {}
+  };
+
+  const handleRecordPayment = async () => {
+    if (!paymentModal || !pmAmount || !pmDate) return;
+    setIsSavingPayment(true);
+    try {
+      const url = paymentModal.type === "cr"
+        ? `/api/counter-receipts/${paymentModal.id}/payments`
+        : `/api/billing-collections/${paymentModal.id}/payments`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentDate: pmDate, refNo: pmRef || undefined, amount: pmAmount }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: "Payment recorded", description: `₱${Number(pmAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })} recorded successfully.` });
+      setPaymentModal(null);
+      setPmAmount(""); setPmRef(""); setPmDate(new Date().toISOString().split("T")[0]);
+      if (paymentModal.type === "cr") fetchCrVault();
+      else fetchBillingVault();
+    } catch {
+      toast({ title: "Error", description: "Failed to record payment.", variant: "destructive" });
+    } finally {
+      setIsSavingPayment(false);
+    }
+  };
+
+  const handleArchiveToggle = async (type: "cr" | "bc", id: number, currentStatus: string) => {
+    const newStatus = currentStatus === "ARCHIVED" ? "ACTIVE" : "ARCHIVED";
+    try {
+      const url = type === "cr"
+        ? `/api/counter-receipts/${id}/status`
+        : `/api/billing-collections/${id}/status`;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error();
+      toast({ title: newStatus === "ARCHIVED" ? "Archived" : "Restored", description: "Status updated." });
+      if (type === "cr") fetchCrVault();
+      else fetchBillingVault();
+    } catch {
+      toast({ title: "Error", variant: "destructive" });
     }
   };
 
@@ -376,6 +471,8 @@ export default function Accounting() {
     if (!isLocked) {
       fetchBills();
       fetchInvoices();
+      fetchCustomers();
+      fetchVendors();
     }
   }, [isLocked]);
 
@@ -384,7 +481,11 @@ export default function Accounting() {
   }, [activeTab, isLocked]);
 
   useEffect(() => {
-    if (!isLocked && activeTab === "receipt") fetchCrVault();
+    if (!isLocked && activeTab === "receipt") fetchCrVault(showArchivedCr);
+  }, [activeTab, isLocked]);
+
+  useEffect(() => {
+    if (!isLocked && activeTab === "billing") fetchBillingVault(showArchivedBilling);
   }, [activeTab, isLocked]);
 
   useEffect(() => {
@@ -420,21 +521,23 @@ export default function Accounting() {
 
   const fetchPendingForVendor = async () => {
     if (!crVendorInput.trim()) {
-      toast({ title: "Enter vendor name", description: "Type a vendor name to fetch their pending invoices.", variant: "destructive" });
+      toast({ title: "Select a vendor", description: "Choose a vendor from the dropdown first.", variant: "destructive" });
       return;
     }
     setIsFetchingPending(true);
     try {
       const params = new URLSearchParams({ vendorName: crVendorInput, status: "PENDING_COUNTER" });
       const res = await fetch(`/api/accounts-payable?${params}`);
+      if (!res.ok) throw new Error("Server error");
       const data: Bill[] = await res.json();
       setCrVendor(crVendorInput);
-      setPendingInvoices(data);
-      setSelectedApIds(data.map((b) => b.id!).filter(Boolean));
-      // auto-set total check amount
-      const total = data.reduce((s, b) => s + Number(b.amountDue), 0);
+      setPendingInvoices(Array.isArray(data) ? data : []);
+      setSelectedApIds((Array.isArray(data) ? data : []).map((b) => b.id!).filter(Boolean));
+      const total = (Array.isArray(data) ? data : []).reduce((s, b) => s + Number(b.amountDue), 0);
       if (total > 0 && numChecks > 0) autoGenerateChecks(total, numChecks, startDate);
-      if (data.length === 0) toast({ title: "No pending invoices", description: `No PENDING_COUNTER invoices found for "${crVendorInput}".` });
+      if (!data.length) toast({ title: "No pending invoices", description: `No PENDING_COUNTER invoices found for "${crVendorInput}".` });
+    } catch {
+      toast({ title: "Error", description: "Failed to fetch pending invoices.", variant: "destructive" });
     } finally {
       setIsFetchingPending(false);
     }
@@ -473,17 +576,22 @@ export default function Accounting() {
     if (!activeChecks.length) { toast({ title: "No checks", description: "Add at least one check.", variant: "destructive" }); return; }
     setIsSavingReceipt(true);
     try {
+      const selectedVendor = vendors.find((v) => v.id === selectedVendorId);
       const res = await fetch("/api/counter-receipts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           receipt: {
             vendorName: crVendor,
+            vendorTin: selectedVendor?.tin || null,
+            vendorAddress: selectedVendor?.address || null,
             receiptDate: crDate,
             refNo: crRefNo,
             totalAmount: String(selectedTotal),
             numberOfChecks: activeChecks.length,
             startDate,
+            amountPaid: "0",
+            status: "ACTIVE",
           },
           checks: activeChecks,
           apInvoiceIds: selectedApIds,
@@ -618,9 +726,11 @@ export default function Accounting() {
     if (!selected.length) {
       toast({ title: "No invoices selected", variant: "destructive" }); return;
     }
+    const customer = customers.find((c) => c.id === selectedCustomerId);
+    const customerName = customer?.name || selected[0].invoice.registeredName;
     setIsGeneratingBilling(true);
     try {
-      await generateBillingPDF(selected[0].invoice.registeredName, billingLines, billingDate);
+      await generateBillingPDF(customerName, billingLines, billingDate);
       // Mark selected invoices as BILLED
       const ids = selected.map((l) => l.invoice.id).filter(Boolean) as number[];
       if (ids.length > 0) {
@@ -629,10 +739,36 @@ export default function Accounting() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ids, status: "BILLED" }),
         });
-        fetchInvoices();
-        setCustomerSearch("");
       }
-      toast({ title: "Billing PDF generated & invoices marked as BILLED" });
+      // Save billing collection to DB
+      const totalAmount = selected.reduce((s, l) => s + Number(l.invoice.totalAmount_Due), 0);
+      await fetch("/api/billing-collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          collection: {
+            customerName,
+            customerTin: customer?.tin || null,
+            customerAddress: customer?.address || null,
+            billingDate,
+            totalAmount: String(totalAmount),
+            amountPaid: "0",
+            status: "ACTIVE",
+          },
+          items: selected.map((l) => ({
+            salesInvoiceId: l.invoice.id,
+            drNo: l.drNo || null,
+            poNo: l.poNo || null,
+            amount: String(l.invoice.totalAmount_Due),
+          })),
+        }),
+      });
+      fetchInvoices();
+      fetchBillingVault();
+      setCustomerSearch("");
+      setSelectedCustomerId(null);
+      setBillingLines([]);
+      toast({ title: "Billing Collection saved & PDF generated", description: "Invoices marked as BILLED." });
     } catch { toast({ title: "Error", variant: "destructive" }); }
     finally { setIsGeneratingBilling(false); }
   };
@@ -842,16 +978,32 @@ export default function Accounting() {
       {/* ══ BILLING COLLECTION TAB ══════════════════════════════════════════ */}
       {activeTab === "billing" && (
         <div className="space-y-5">
+          {/* New Billing Form */}
           <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4 flex items-center gap-2">
+              <Plus className="h-4 w-4 text-blue-600" /> New Billing Collection
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">Customer / Registered Name</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  <input type="text" data-testid="input-customer-search"
-                    className="w-full border border-gray-200 rounded-md pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    placeholder="Type customer name..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
-                </div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">Customer</label>
+                <select data-testid="select-billing-customer"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  value={selectedCustomerId ?? ""}
+                  onChange={(e) => {
+                    const id = Number(e.target.value) || null;
+                    setSelectedCustomerId(id);
+                    const cust = customers.find((c) => c.id === id);
+                    setCustomerSearch(cust?.name || "");
+                  }}>
+                  <option value="">— Select customer —</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}{c.tin ? ` (TIN: ${c.tin})` : ""}</option>
+                  ))}
+                </select>
+                {(() => {
+                  const cust = customers.find((c) => c.id === selectedCustomerId);
+                  return cust?.address ? <p className="text-xs text-gray-400 mt-1 truncate">{cust.address}</p> : null;
+                })()}
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">Billing Date</label>
@@ -864,14 +1016,16 @@ export default function Accounting() {
                   data-testid="button-generate-billing-pdf"
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-md flex items-center justify-center text-sm font-medium">
                   {isGeneratingBilling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                  Generate PDF ({selectedCount})
+                  Save & Generate PDF ({selectedCount})
                 </button>
               </div>
             </div>
           </div>
+
+          {/* Invoice Lines */}
           {billingLines.length === 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-400">
-              {customerSearch.trim() ? `No invoices found for "${customerSearch}".` : "Enter a customer name to search their invoices."}
+              {customerSearch.trim() ? `No UNPAID invoices found for "${customerSearch}".` : "Select a customer above to load their unpaid invoices."}
             </div>
           ) : (
             <>
@@ -913,6 +1067,100 @@ export default function Accounting() {
               </div>
             </>
           )}
+
+          {/* Billing Collection Vault */}
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                <Archive className="h-4 w-4 text-blue-600" /> Billing Collection Vault
+                {billingVault.length > 0 && <span className="bg-blue-100 text-blue-700 rounded-full text-xs px-2 py-0.5">{billingVault.length}</span>}
+              </h3>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                  <input type="checkbox" checked={showArchivedBilling}
+                    onChange={(e) => { setShowArchivedBilling(e.target.checked); fetchBillingVault(e.target.checked); }}
+                    className="rounded" />
+                  Show Archived
+                </label>
+                <button onClick={() => fetchBillingVault(showArchivedBilling)} disabled={billingVaultLoading}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium">
+                  {billingVaultLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Refresh
+                </button>
+              </div>
+            </div>
+            {billingVaultLoading ? (
+              <div className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></div>
+            ) : billingVault.length === 0 ? (
+              <div className="py-10 text-center text-gray-400 text-sm">No billing collections yet. Generate one above.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 border-b text-xs uppercase tracking-wider text-gray-500 font-bold">
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">Customer</th>
+                      <th className="px-4 py-2 text-left">TIN</th>
+                      <th className="px-4 py-2 text-center">Items</th>
+                      <th className="px-4 py-2 text-right">Total</th>
+                      <th className="px-4 py-2 text-right">Paid</th>
+                      <th className="px-4 py-2 text-right">Balance</th>
+                      <th className="px-4 py-2 text-center">Status</th>
+                      <th className="px-4 py-2 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {billingVault.map((bc) => {
+                      const balance = Number(bc.totalAmount) - Number(bc.amountPaid || 0);
+                      return (
+                        <tr key={bc.id} className={`hover:bg-gray-50 transition-colors ${bc.status === "ARCHIVED" ? "opacity-60" : ""}`}>
+                          <td className="px-4 py-3 text-gray-600 text-xs">{bc.billingDate ? new Date(bc.billingDate).toLocaleDateString("en-PH") : "-"}</td>
+                          <td className="px-4 py-3 font-medium text-gray-800">{bc.customerName}</td>
+                          <td className="px-4 py-3 text-gray-500 text-xs font-mono">{bc.customerTin || "-"}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{bc.items?.length ?? 0}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">₱{Number(bc.totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-right text-green-700 font-semibold">₱{Number(bc.amountPaid || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-right font-bold text-red-700">₱{balance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${bc.status === "ARCHIVED" ? "bg-gray-100 text-gray-500" : "bg-green-100 text-green-700"}`}>
+                              {bc.status === "ARCHIVED" ? "ARCHIVED" : "ACTIVE"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => setPaymentModal({ type: "bc", id: bc.id, label: bc.customerName, totalAmount: Number(bc.totalAmount), amountPaid: Number(bc.amountPaid || 0) })}
+                                title="Record Payment"
+                                className="p-1.5 text-green-500 hover:bg-green-50 hover:text-green-700 rounded-md transition-colors text-xs font-medium"
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleArchiveToggle("bc", bc.id, bc.status)}
+                                title={bc.status === "ARCHIVED" ? "Restore" : "Archive"}
+                                className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-md transition-colors"
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t border-gray-200">
+                      <td colSpan={4} className="px-4 py-2 text-xs font-bold text-gray-500 uppercase">Total ({billingVault.length})</td>
+                      <td className="px-4 py-2 text-right font-bold text-gray-900">₱{billingVault.reduce((s, bc) => s + Number(bc.totalAmount || 0), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      <td className="px-4 py-2 text-right font-bold text-green-700">₱{billingVault.reduce((s, bc) => s + Number(bc.amountPaid || 0), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                      <td colSpan={3}></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -926,12 +1174,25 @@ export default function Accounting() {
             </h3>
             <div className="flex gap-3 items-end">
               <div className="flex-1">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Vendor / Supplier Name</label>
-                <input type="text" data-testid="input-cr-vendor"
-                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  placeholder="e.g. ACME Truck Parts Inc."
-                  value={crVendorInput} onChange={(e) => setCrVendorInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && fetchPendingForVendor()} />
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Vendor / Supplier</label>
+                <select data-testid="input-cr-vendor"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  value={selectedVendorId ?? ""}
+                  onChange={(e) => {
+                    const id = Number(e.target.value) || null;
+                    setSelectedVendorId(id);
+                    const v = vendors.find((x) => x.id === id);
+                    setCrVendorInput(v?.name || "");
+                  }}>
+                  <option value="">— Select vendor —</option>
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.id}>{v.name}{v.tin ? ` (TIN: ${v.tin})` : ""}</option>
+                  ))}
+                </select>
+                {(() => {
+                  const v = vendors.find((x) => x.id === selectedVendorId);
+                  return v?.address ? <p className="text-xs text-gray-400 mt-1">{v.address}</p> : null;
+                })()}
               </div>
               <button onClick={fetchPendingForVendor} disabled={isFetchingPending}
                 data-testid="button-fetch-pending"
@@ -1148,10 +1409,18 @@ export default function Accounting() {
                   <span className="bg-indigo-100 text-indigo-700 rounded-full text-xs px-2 py-0.5">{crVault.length}</span>
                 )}
               </h3>
-              <button onClick={fetchCrVault} disabled={crVaultLoading}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium">
-                {crVaultLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Refresh
-              </button>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                  <input type="checkbox" checked={showArchivedCr}
+                    onChange={(e) => { setShowArchivedCr(e.target.checked); fetchCrVault(e.target.checked); }}
+                    className="rounded" />
+                  Show Archived
+                </label>
+                <button onClick={() => fetchCrVault(showArchivedCr)} disabled={crVaultLoading}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md flex items-center gap-2 text-xs font-medium">
+                  {crVaultLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Refresh
+                </button>
+              </div>
             </div>
             {crVaultLoading ? (
               <div className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-gray-400" /></div>
@@ -1167,43 +1436,72 @@ export default function Accounting() {
                       <th className="px-4 py-2 text-left">Ref No.</th>
                       <th className="px-4 py-2 text-center">Checks</th>
                       <th className="px-4 py-2 text-right">Total</th>
+                      <th className="px-4 py-2 text-right">Paid</th>
+                      <th className="px-4 py-2 text-right">Balance</th>
+                      <th className="px-4 py-2 text-center">Status</th>
                       <th className="px-4 py-2 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {crVault.map((cr) => (
-                      <tr key={cr.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3 text-gray-600 text-xs">
-                          {cr.receiptDate ? new Date(cr.receiptDate).toLocaleDateString("en-PH") : "-"}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-gray-800">{cr.vendorName}</td>
-                        <td className="px-4 py-3 text-gray-500 font-mono text-xs">{cr.refNo || "-"}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
-                            {cr.checks?.length ?? cr.numberOfChecks}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold text-gray-900">
-                          ₱{Number(cr.totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button onClick={() => setViewingReceipt(cr)} title="View"
-                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
-                              <Eye className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={() => { setEditingReceipt({ ...cr }); setEditingReceiptChecks(cr.checks ? [...cr.checks] : []); }} title="Edit"
-                              className="p-1 text-gray-400 hover:text-amber-600 transition-colors">
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                            <button onClick={() => setDeletingReceipt(cr)} title="Delete"
-                              className="p-1 text-gray-400 hover:text-red-600 transition-colors">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {crVault.map((cr) => {
+                      const balance = Number(cr.totalAmount) - Number(cr.amountPaid || 0);
+                      return (
+                        <tr key={cr.id} className={`hover:bg-gray-50 transition-colors ${cr.status === "ARCHIVED" ? "opacity-60" : ""}`}>
+                          <td className="px-4 py-3 text-gray-600 text-xs">
+                            {cr.receiptDate ? new Date(cr.receiptDate).toLocaleDateString("en-PH") : "-"}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-gray-800">{cr.vendorName}</td>
+                          <td className="px-4 py-3 text-gray-500 font-mono text-xs">{cr.refNo || "-"}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                              {cr.checks?.length ?? cr.numberOfChecks}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-gray-900">
+                            ₱{Number(cr.totalAmount).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-right text-green-700 font-semibold">
+                            ₱{Number(cr.amountPaid || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-right font-bold text-red-700">
+                            ₱{balance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cr.status === "ARCHIVED" ? "bg-gray-100 text-gray-500" : "bg-green-100 text-green-700"}`}>
+                              {cr.status === "ARCHIVED" ? "ARCHIVED" : "ACTIVE"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => setViewingReceipt(cr)} title="View"
+                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors">
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setPaymentModal({ type: "cr", id: cr.id, label: cr.vendorName, totalAmount: Number(cr.totalAmount), amountPaid: Number(cr.amountPaid || 0) })}
+                                title="Record Payment"
+                                className="p-1.5 text-green-500 hover:bg-green-50 hover:text-green-700 rounded-md transition-colors">
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                              <button onClick={() => { setEditingReceipt({ ...cr }); setEditingReceiptChecks(cr.checks ? [...cr.checks] : []); }} title="Edit"
+                                className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-md transition-colors">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleArchiveToggle("cr", cr.id, cr.status)}
+                                title={cr.status === "ARCHIVED" ? "Restore" : "Archive"}
+                                className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-md transition-colors">
+                                <Archive className="h-3.5 w-3.5" />
+                              </button>
+                              <button onClick={() => setDeletingReceipt(cr)} title="Delete"
+                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="bg-gray-50 border-t border-gray-200">
@@ -1213,7 +1511,10 @@ export default function Accounting() {
                       <td className="px-4 py-2 text-right font-bold text-gray-900">
                         ₱{crVault.reduce((s, cr) => s + Number(cr.totalAmount || 0), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                       </td>
-                      <td></td>
+                      <td className="px-4 py-2 text-right font-bold text-green-700">
+                        ₱{crVault.reduce((s, cr) => s + Number(cr.amountPaid || 0), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1786,6 +2087,62 @@ export default function Accounting() {
                 {isDeletingBill ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Delete
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── PAYMENT RECORDING MODAL ── */}
+      {paymentModal && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Record Payment</h2>
+                <p className="text-sm text-gray-500 mt-0.5">{paymentModal.label}</p>
+              </div>
+              <button onClick={() => setPaymentModal(null)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4">
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">Total Amount</p>
+                  <p className="text-base font-bold text-gray-900">₱{paymentModal.totalAmount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">Balance</p>
+                  <p className="text-base font-bold text-red-700">₱{(paymentModal.totalAmount - paymentModal.amountPaid).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Payment Date</label>
+                <input type="date" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={pmDate} onChange={(e) => setPmDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Reference / Check No. (optional)</label>
+                <input type="text" placeholder="e.g. Check No. 12345 or GCash ref"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={pmRef} onChange={(e) => setPmRef(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Amount (₱)</label>
+                <input type="number" step="0.01" min="0.01" placeholder="0.00"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-right"
+                  value={pmAmount} onChange={(e) => setPmAmount(e.target.value)} />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setPaymentModal(null)}
+                  className="flex-1 border border-gray-200 text-gray-600 hover:bg-gray-50 px-4 py-2 rounded-md text-sm font-medium">
+                  Cancel
+                </button>
+                <button onClick={handleRecordPayment} disabled={isSavingPayment || !pmAmount || !pmDate}
+                  className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-md text-sm font-bold flex items-center justify-center gap-2">
+                  {isSavingPayment ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
+                  Record Payment
+                </button>
+              </div>
             </div>
           </div>
         </div>

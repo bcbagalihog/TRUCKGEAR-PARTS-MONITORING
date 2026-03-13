@@ -2,7 +2,8 @@ import {
   products, productOemNumbers, productCompatibility,
   customers, vendors, salesOrders, salesOrderItems, purchaseOrders, purchaseOrderItems,
   inventoryTransactions, salesInvoices, salesInvoiceItems, drawerSessions, accountsPayable,
-  counterReceipts, counterReceiptChecks,
+  counterReceipts, counterReceiptChecks, counterReceiptPayments,
+  billingCollections, billingCollectionItems, billingCollectionPayments,
   type Product, type InsertProduct, type ProductWithDetails,
   type Customer, type InsertCustomer,
   type Vendor, type InsertVendor,
@@ -15,6 +16,9 @@ import {
   type AccountsPayable, type InsertAccountsPayable,
   type CounterReceipt, type InsertCounterReceipt,
   type CounterReceiptCheck, type InsertCounterReceiptCheck,
+  type CounterReceiptPayment,
+  type BillingCollection, type InsertBillingCollection,
+  type BillingCollectionItem, type BillingCollectionPayment,
 } from "@shared/schema";
 import { users } from "@shared/models/auth";
 import { db } from "./db";
@@ -78,8 +82,21 @@ export interface IStorage extends IAuthStorage {
 
   // Counter Receipts
   createCounterReceipt(data: InsertCounterReceipt, checks: InsertCounterReceiptCheck[]): Promise<CounterReceipt & { checks: CounterReceiptCheck[] }>;
-  getCounterReceipts(): Promise<(CounterReceipt & { checks: CounterReceiptCheck[] })[]>;
+  getCounterReceipts(includeArchived?: boolean): Promise<(CounterReceipt & { checks: CounterReceiptCheck[] })[]>;
   getCounterReceiptById(id: number): Promise<(CounterReceipt & { checks: CounterReceiptCheck[]; apInvoices: AccountsPayable[] }) | null>;
+  addCounterReceiptPayment(counterReceiptId: number, data: { paymentDate: string; refNo?: string; amount: string }): Promise<CounterReceiptPayment>;
+  getCounterReceiptPayments(counterReceiptId: number): Promise<CounterReceiptPayment[]>;
+  updateCounterReceiptStatus(id: number, status: string): Promise<void>;
+  deleteCounterReceipt(id: number): Promise<void>;
+  updateCounterReceipt(id: number, data: any, checks: any[]): Promise<any>;
+  deleteAccountsPayable(id: number): Promise<void>;
+
+  // Billing Collections
+  createBillingCollection(data: InsertBillingCollection, items: { salesInvoiceId: number; drNo?: string; poNo?: string; amount: string }[]): Promise<BillingCollection & { items: BillingCollectionItem[] }>;
+  getBillingCollections(includeArchived?: boolean): Promise<(BillingCollection & { items: BillingCollectionItem[]; payments: BillingCollectionPayment[] })[]>;
+  getBillingCollectionById(id: number): Promise<(BillingCollection & { items: BillingCollectionItem[]; payments: BillingCollectionPayment[] }) | null>;
+  addBillingCollectionPayment(billingCollectionId: number, data: { paymentDate: string; refNo?: string; amount: string }): Promise<BillingCollectionPayment>;
+  updateBillingCollectionStatus(id: number, status: string): Promise<void>;
 
   // Admin Users
   getAllUsers(): Promise<any[]>;
@@ -615,8 +632,10 @@ export class DatabaseStorage implements IStorage {
     return { ...receipt, checks: insertedChecks };
   }
 
-  async getCounterReceipts(): Promise<(CounterReceipt & { checks: CounterReceiptCheck[] })[]> {
-    const receipts = await db.select().from(counterReceipts).orderBy(desc(counterReceipts.createdAt));
+  async getCounterReceipts(includeArchived = false): Promise<(CounterReceipt & { checks: CounterReceiptCheck[] })[]> {
+    let query = db.select().from(counterReceipts).$dynamic();
+    if (!includeArchived) query = query.where(eq(counterReceipts.status, "ACTIVE"));
+    const receipts = await query.orderBy(desc(counterReceipts.createdAt));
     const allChecks = await db.select().from(counterReceiptChecks);
     return receipts.map(r => ({
       ...r,
@@ -650,8 +669,92 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCounterReceipt(id: number): Promise<void> {
+    await db.delete(counterReceiptPayments).where(eq(counterReceiptPayments.counterReceiptId, id));
     await db.delete(counterReceiptChecks).where(eq(counterReceiptChecks.counterReceiptId, id));
     await db.delete(counterReceipts).where(eq(counterReceipts.id, id));
+  }
+
+  async addCounterReceiptPayment(counterReceiptId: number, data: { paymentDate: string; refNo?: string; amount: string }): Promise<CounterReceiptPayment> {
+    const [payment] = await db.insert(counterReceiptPayments)
+      .values({ counterReceiptId, paymentDate: data.paymentDate, refNo: data.refNo || null, amount: data.amount })
+      .returning();
+    // Update amountPaid on the receipt and auto-archive if fully paid
+    const [receipt] = await db.select().from(counterReceipts).where(eq(counterReceipts.id, counterReceiptId));
+    if (receipt) {
+      const payments = await db.select().from(counterReceiptPayments).where(eq(counterReceiptPayments.counterReceiptId, counterReceiptId));
+      const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
+      const newStatus = totalPaid >= Number(receipt.totalAmount) ? "ARCHIVED" : receipt.status;
+      await db.update(counterReceipts)
+        .set({ amountPaid: String(totalPaid), status: newStatus })
+        .where(eq(counterReceipts.id, counterReceiptId));
+    }
+    return payment;
+  }
+
+  async getCounterReceiptPayments(counterReceiptId: number): Promise<CounterReceiptPayment[]> {
+    return await db.select().from(counterReceiptPayments)
+      .where(eq(counterReceiptPayments.counterReceiptId, counterReceiptId))
+      .orderBy(desc(counterReceiptPayments.createdAt));
+  }
+
+  async updateCounterReceiptStatus(id: number, status: string): Promise<void> {
+    await db.update(counterReceipts).set({ status }).where(eq(counterReceipts.id, id));
+  }
+
+  // --- BILLING COLLECTIONS ---
+  async createBillingCollection(
+    data: InsertBillingCollection,
+    items: { salesInvoiceId: number; drNo?: string; poNo?: string; amount: string }[]
+  ): Promise<BillingCollection & { items: BillingCollectionItem[] }> {
+    const [coll] = await db.insert(billingCollections).values(data).returning();
+    const insertedItems = items.length > 0
+      ? await db.insert(billingCollectionItems)
+          .values(items.map(i => ({ billingCollectionId: coll.id, salesInvoiceId: i.salesInvoiceId, drNo: i.drNo || null, poNo: i.poNo || null, amount: i.amount })))
+          .returning()
+      : [];
+    return { ...coll, items: insertedItems };
+  }
+
+  async getBillingCollections(includeArchived = false): Promise<(BillingCollection & { items: BillingCollectionItem[]; payments: BillingCollectionPayment[] })[]> {
+    let query = db.select().from(billingCollections).$dynamic();
+    if (!includeArchived) query = query.where(eq(billingCollections.status, "ACTIVE"));
+    const colls = await query.orderBy(desc(billingCollections.createdAt));
+    const allItems = await db.select().from(billingCollectionItems);
+    const allPayments = await db.select().from(billingCollectionPayments);
+    return colls.map(c => ({
+      ...c,
+      items: allItems.filter(i => i.billingCollectionId === c.id),
+      payments: allPayments.filter(p => p.billingCollectionId === c.id),
+    }));
+  }
+
+  async getBillingCollectionById(id: number): Promise<(BillingCollection & { items: BillingCollectionItem[]; payments: BillingCollectionPayment[] }) | null> {
+    const [coll] = await db.select().from(billingCollections).where(eq(billingCollections.id, id));
+    if (!coll) return null;
+    const items = await db.select().from(billingCollectionItems).where(eq(billingCollectionItems.billingCollectionId, id));
+    const payments = await db.select().from(billingCollectionPayments).where(eq(billingCollectionPayments.billingCollectionId, id));
+    return { ...coll, items, payments };
+  }
+
+  async addBillingCollectionPayment(billingCollectionId: number, data: { paymentDate: string; refNo?: string; amount: string }): Promise<BillingCollectionPayment> {
+    const [payment] = await db.insert(billingCollectionPayments)
+      .values({ billingCollectionId, paymentDate: data.paymentDate, refNo: data.refNo || null, amount: data.amount })
+      .returning();
+    // Update amountPaid and auto-archive if fully paid
+    const [coll] = await db.select().from(billingCollections).where(eq(billingCollections.id, billingCollectionId));
+    if (coll) {
+      const payments = await db.select().from(billingCollectionPayments).where(eq(billingCollectionPayments.billingCollectionId, billingCollectionId));
+      const totalPaid = payments.reduce((s, p) => s + Number(p.amount), 0);
+      const newStatus = totalPaid >= Number(coll.totalAmount) ? "ARCHIVED" : coll.status;
+      await db.update(billingCollections)
+        .set({ amountPaid: String(totalPaid), status: newStatus })
+        .where(eq(billingCollections.id, billingCollectionId));
+    }
+    return payment;
+  }
+
+  async updateBillingCollectionStatus(id: number, status: string): Promise<void> {
+    await db.update(billingCollections).set({ status }).where(eq(billingCollections.id, id));
   }
 
   // --- ADMIN USERS ---

@@ -14,6 +14,7 @@ import { eq, and, desc, ilike, inArray, gte, lte, sql } from "drizzle-orm";
 import {
   salesInvoices, salesInvoiceItems, drawerSessions,
   accountsPayable, counterReceiptChecks, purchaseOrders,
+  billingCollections, billingCollectionItems, billingCollectionPayments,
 } from "@shared/schema";
 
 const uploadsDir = path.join(process.cwd(), "uploads");
@@ -525,7 +526,8 @@ export async function registerRoutes(
   // --- Counter Receipts ---
   app.get("/api/counter-receipts", isAuthenticated, async (req, res) => {
     try {
-      const receipts = await storage.getCounterReceipts();
+      const includeArchived = req.query.includeArchived === "true";
+      const receipts = await storage.getCounterReceipts(includeArchived);
       res.json(receipts);
     } catch (e) {
       console.error("counter-receipts list error:", e);
@@ -582,6 +584,85 @@ export async function registerRoutes(
     } catch (e) {
       console.error("counter-receipts delete error:", e);
       res.status(500).json({ message: "Failed to delete counter receipt" });
+    }
+  });
+
+  app.get("/api/counter-receipts/:id/payments", isAuthenticated, async (req, res) => {
+    try {
+      const payments = await storage.getCounterReceiptPayments(Number(req.params.id));
+      res.json(payments);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.post("/api/counter-receipts/:id/payments", isAuthenticated, async (req, res) => {
+    try {
+      const payment = await storage.addCounterReceiptPayment(Number(req.params.id), req.body);
+      res.status(201).json(payment);
+    } catch (e) {
+      console.error("cr payment error:", e);
+      res.status(500).json({ message: "Failed to record payment" });
+    }
+  });
+
+  app.patch("/api/counter-receipts/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      await storage.updateCounterReceiptStatus(Number(req.params.id), req.body.status);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update status" });
+    }
+  });
+
+  // --- Billing Collections ---
+  app.get("/api/billing-collections", isAuthenticated, async (req, res) => {
+    try {
+      const includeArchived = req.query.includeArchived === "true";
+      const collections = await storage.getBillingCollections(includeArchived);
+      res.json(collections);
+    } catch (e) {
+      console.error("billing-collections list error:", e);
+      res.status(500).json({ message: "Failed to fetch billing collections" });
+    }
+  });
+
+  app.post("/api/billing-collections", isAuthenticated, async (req, res) => {
+    try {
+      const { collection, items } = req.body as { collection: any; items: any[] };
+      const created = await storage.createBillingCollection({ ...collection, companyId: 1 }, items || []);
+      res.status(201).json(created);
+    } catch (e) {
+      console.error("billing-collections create error:", e);
+      res.status(500).json({ message: "Failed to create billing collection" });
+    }
+  });
+
+  app.get("/api/billing-collections/:id/payments", isAuthenticated, async (req, res) => {
+    try {
+      const coll = await storage.getBillingCollectionById(Number(req.params.id));
+      res.json(coll?.payments || []);
+    } catch (e) {
+      res.status(500).json({ message: "Failed to fetch payments" });
+    }
+  });
+
+  app.post("/api/billing-collections/:id/payments", isAuthenticated, async (req, res) => {
+    try {
+      const payment = await storage.addBillingCollectionPayment(Number(req.params.id), req.body);
+      res.status(201).json(payment);
+    } catch (e) {
+      console.error("bc payment error:", e);
+      res.status(500).json({ message: "Failed to record payment" });
+    }
+  });
+
+  app.patch("/api/billing-collections/:id/status", isAuthenticated, async (req, res) => {
+    try {
+      await storage.updateBillingCollectionStatus(Number(req.params.id), req.body.status);
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ message: "Failed to update status" });
     }
   });
 

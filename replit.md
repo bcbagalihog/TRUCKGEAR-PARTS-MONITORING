@@ -27,10 +27,11 @@ Includes inventory tracking with OEM cross-referencing, sales orders, purchase o
 - **POS Payment Methods**: Cash, GCash (ref#), Check (bank/checkNo/maturityDate), NET Days (days/PO# → saves as UNPAID → links to Billing Collection)
 - **Accounting Module** (PIN: 8888): Four tabs:
   - Accounts Payable: daily invoice log with PENDING_COUNTER/COUNTERED statuses, quick-add form, AI scan, vendor/status filters
-  - Billing Collection: fetch UNPAID invoices by customer, checkbox selection, generate PDF (logo/table/yellow total), marks as BILLED
-  - Supplier Counter Receipt: fetch AP invoices by vendor, Installment Generator (split total into N weekly checks), save & mark COUNTERED, PDF export
+  - Billing Collection: customer dropdown (auto-fills TIN/address), select UNPAID invoices, generate PDF (logo/table/yellow total), saves billing collection to DB with payment tracking + archive toggle; Billing Collection Vault shows active/archived collections with balance tracking
+  - Supplier Counter Receipt: vendor dropdown (auto-fills TIN/address), fetch AP invoices, Installment Generator (split total into N weekly checks), save & mark COUNTERED, PDF export; Counter Receipt Vault shows active/archived receipts with Paid/Balance columns, payment recording, archive toggle
   - Check Summary: registry of all CHECK payment invoices from POS (bank, check no., maturity date, amount)
 - **PDF Generation**: jsPDF + jspdf-autotable; Billing Collection PDF has company logo, BILLING COLLECTION title, Date/Invoice/DR/PO/Amount table, yellow total box. Counter Receipt PDF has check details table and yellow total box.
+- **Purchase Orders**: soldTo and remarks fields in PO form (hidden from PDF print output)
 
 ## Project Structure
 ```

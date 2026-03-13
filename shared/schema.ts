@@ -65,6 +65,7 @@ export const customers = pgTable("customers", {
   email: text("email"),
   phone: text("phone"),
   address: text("address"),
+  tin: text("tin"),
 });
 
 export const vendors = pgTable("vendors", {
@@ -74,6 +75,7 @@ export const vendors = pgTable("vendors", {
   phone: text("phone"),
   address: text("address"),
   leadTimeDays: integer("lead_time_days").default(0),
+  tin: text("tin"),
 });
 
 // === CASH DRAWER MANAGEMENT ===
@@ -130,6 +132,8 @@ export const purchaseOrders = pgTable("purchase_orders", {
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).default(
     "0",
   ),
+  remarks: text("remarks"),
+  soldTo: text("sold_to"),
 });
 
 export const purchaseOrderItems = pgTable("purchase_order_items", {
@@ -175,9 +179,13 @@ export const accountsPayable = pgTable("accounts_payable", {
 export const counterReceipts = pgTable("counter_receipts", {
   id: serial("id").primaryKey(),
   vendorName: text("vendor_name").notNull(),
+  vendorTin: text("vendor_tin"),
+  vendorAddress: text("vendor_address"),
   receiptDate: date("receipt_date").notNull(),
   refNo: text("ref_no"),
   totalAmount: numeric("total_amount").notNull(),
+  amountPaid: numeric("amount_paid").notNull().default("0"),
+  status: text("status").notNull().default("ACTIVE"),
   numberOfChecks: integer("number_of_checks").notNull().default(1),
   startDate: date("start_date"),
   companyId: integer("company_id").notNull().default(1),
@@ -191,6 +199,47 @@ export const counterReceiptChecks = pgTable("counter_receipt_checks", {
   bank: text("bank"),
   checkDate: date("check_date"),
   amount: numeric("amount").notNull(),
+});
+
+export const counterReceiptPayments = pgTable("counter_receipt_payments", {
+  id: serial("id").primaryKey(),
+  counterReceiptId: integer("counter_receipt_id").notNull().references(() => counterReceipts.id),
+  paymentDate: date("payment_date").notNull(),
+  refNo: text("ref_no"),
+  amount: numeric("amount").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// === BILLING COLLECTIONS ===
+export const billingCollections = pgTable("billing_collections", {
+  id: serial("id").primaryKey(),
+  customerName: text("customer_name").notNull(),
+  customerTin: text("customer_tin"),
+  customerAddress: text("customer_address"),
+  collectionDate: date("collection_date").notNull(),
+  totalAmount: numeric("total_amount").notNull(),
+  amountPaid: numeric("amount_paid").notNull().default("0"),
+  status: text("status").notNull().default("ACTIVE"),
+  companyId: integer("company_id").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const billingCollectionItems = pgTable("billing_collection_items", {
+  id: serial("id").primaryKey(),
+  billingCollectionId: integer("billing_collection_id").notNull().references(() => billingCollections.id),
+  salesInvoiceId: integer("sales_invoice_id").notNull(),
+  drNo: text("dr_no"),
+  poNo: text("po_no"),
+  amount: numeric("amount").notNull().default("0"),
+});
+
+export const billingCollectionPayments = pgTable("billing_collection_payments", {
+  id: serial("id").primaryKey(),
+  billingCollectionId: integer("billing_collection_id").notNull().references(() => billingCollections.id),
+  paymentDate: date("payment_date").notNull(),
+  refNo: text("ref_no"),
+  amount: numeric("amount").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // === SALES INVOICES (VAT OUTPUT) ===
@@ -398,3 +447,11 @@ export type CounterReceipt = typeof counterReceipts.$inferSelect;
 export type InsertCounterReceipt = typeof counterReceipts.$inferInsert;
 export type CounterReceiptCheck = typeof counterReceiptChecks.$inferSelect;
 export type InsertCounterReceiptCheck = typeof counterReceiptChecks.$inferInsert;
+export type CounterReceiptPayment = typeof counterReceiptPayments.$inferSelect;
+export type InsertCounterReceiptPayment = typeof counterReceiptPayments.$inferInsert;
+export type BillingCollection = typeof billingCollections.$inferSelect;
+export type InsertBillingCollection = typeof billingCollections.$inferInsert;
+export type BillingCollectionItem = typeof billingCollectionItems.$inferSelect;
+export type InsertBillingCollectionItem = typeof billingCollectionItems.$inferInsert;
+export type BillingCollectionPayment = typeof billingCollectionPayments.$inferSelect;
+export type InsertBillingCollectionPayment = typeof billingCollectionPayments.$inferInsert;

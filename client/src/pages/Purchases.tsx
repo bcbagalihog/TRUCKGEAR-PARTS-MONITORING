@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Loader2, Trash2, Package, FileText, Pencil, Printer, Download } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +42,8 @@ const purchaseItemSchema = z.object({
 const purchaseOrderSchema = z.object({
   vendorId: z.coerce.number().min(1, "Vendor is required"),
   status: z.string(),
+  soldTo: z.string().optional(),
+  remarks: z.string().optional(),
   items: z.array(purchaseItemSchema).min(1, "Add at least one item"),
 });
 
@@ -469,6 +472,31 @@ function POFormFields({ form, products, vendors, watchedItems, fields, append, r
         />
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <FormField
+          control={form.control}
+          name="soldTo"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Sold To (optional)</FormLabel>
+              <FormControl><Input data-testid="input-po-sold-to" placeholder="Delivery recipient / project" {...field} value={field.value || ""} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="remarks"
+          render={({ field }: any) => (
+            <FormItem>
+              <FormLabel>Remarks (optional)</FormLabel>
+              <FormControl><Textarea data-testid="input-po-remarks" placeholder="Internal notes or remarks" rows={1} className="resize-none" {...field} value={field.value || ""} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
       <div className="space-y-4">
         <div className="flex flex-wrap justify-between items-center gap-2">
           <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Order Items</h3>
@@ -588,6 +616,8 @@ function CreatePurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     resolver: zodResolver(purchaseOrderSchema),
     defaultValues: {
       status: "draft",
+      soldTo: "",
+      remarks: "",
       items: [{ isCustom: false, productId: null, description: "", quantity: 1, unitCost: 0 }]
     }
   });
@@ -621,6 +651,8 @@ function CreatePurchaseDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     const payload = {
       vendorId: values.vendorId,
       status: values.status,
+      soldTo: values.soldTo || null,
+      remarks: values.remarks || null,
       items: values.items.map(item => ({
         productId: item.isCustom ? null : (item.productId || null),
         description: item.isCustom ? item.description : null,
@@ -695,6 +727,8 @@ function EditPurchaseDialog({ order, open, onOpenChange }: { order: any; open: b
     defaultValues: {
       vendorId: order.vendorId,
       status: order.status,
+      soldTo: order.soldTo || "",
+      remarks: order.remarks || "",
       items: defaultItems.length > 0 ? defaultItems : [{ isCustom: false, productId: null, description: "", quantity: 1, unitCost: 0 }],
     }
   });
@@ -728,6 +762,8 @@ function EditPurchaseDialog({ order, open, onOpenChange }: { order: any; open: b
     const payload = {
       vendorId: values.vendorId,
       status: values.status,
+      soldTo: values.soldTo || null,
+      remarks: values.remarks || null,
       items: values.items.map(item => ({
         productId: item.isCustom ? null : (item.productId || null),
         description: item.isCustom ? item.description : null,
