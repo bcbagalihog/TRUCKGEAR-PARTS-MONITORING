@@ -62,6 +62,9 @@ export default function POS() {
   const [netDays, setNetDays] = useState("30");
   const [poNumber, setPoNumber] = useState("");
 
+  // CALIBRATION PREVIEW
+  const [showCalibrationPreview, setShowCalibrationPreview] = useState(false);
+
   // VAULT / TAB STATE
   const queryClient = useQueryClient();
   const [posTab, setPosTab] = useState<"new" | "vault">("new");
@@ -380,6 +383,13 @@ export default function POS() {
                 className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-md font-medium shadow-sm inline-flex items-center"
               >
                 <Search className="w-4 h-4 mr-2" /> Find Part
+              </button>
+              <button
+                onClick={() => setShowCalibrationPreview(true)}
+                className="bg-gray-100 border border-gray-300 text-gray-700 px-4 py-2 rounded-md font-medium shadow-sm inline-flex items-center"
+                title="Preview print alignment against your form"
+              >
+                <Eye className="w-4 h-4 mr-2" /> Preview Layout
               </button>
               <button
                 onClick={handleSaveToVault}
@@ -1052,7 +1062,7 @@ export default function POS() {
           </div>
         )}
 
-        {/* ── VAULT REPRINT AREA (A5 absolute positioning — same form layout) ── */}
+        {/* ── VAULT REPRINT AREA (A5 — identical layout to main print area) ── */}
         {vaultPrintInvoice && (
           <div
             id="vault-print-area"
@@ -1061,7 +1071,8 @@ export default function POS() {
               position: "relative",
               width: "148mm",
               height: "210mm",
-              margin: "0 auto",
+              margin: "0",
+              padding: "0",
               overflow: "hidden",
               background: "white",
               fontFamily: "'Courier New', Courier, monospace",
@@ -1069,69 +1080,66 @@ export default function POS() {
               color: "black",
             }}
           >
-            {/* Invoice Number */}
-            <div style={{ position: "absolute", top: "45mm", right: "20mm", fontWeight: "bold" }}>
+            {/* ── Invoice Number ── */}
+            <div style={{ position: "absolute", top: "43mm", left: "112mm", width: "32mm", fontWeight: "bold", fontSize: "13pt" }}>
               {vaultPrintInvoice.invoiceNumber}
             </div>
 
-            {/* Date */}
-            <div style={{ position: "absolute", top: "45mm", right: "60mm" }}>
+            {/* ── Date ── */}
+            <div style={{ position: "absolute", top: "66mm", left: "107mm", width: "37mm" }}>
               {new Date(vaultPrintInvoice.date || vaultPrintInvoice.createdAt).toLocaleDateString("en-PH")}
             </div>
 
-            {/* Customer Name */}
-            <div style={{ position: "absolute", top: "65mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+            {/* ── Customer/Sold To name ── */}
+            <div style={{ position: "absolute", top: "66mm", left: "44mm", width: "60mm", whiteSpace: "nowrap", overflow: "hidden" }}>
               {vaultPrintInvoice.registeredName}
             </div>
 
-            {/* TIN */}
-            <div style={{ position: "absolute", top: "71mm", left: "30mm", width: "108mm" }}>
+            {/* ── Registered Name value ── */}
+            <div style={{ position: "absolute", top: "75mm", left: "54mm", width: "88mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+              {vaultPrintInvoice.registeredName}
+            </div>
+
+            {/* ── TIN ── */}
+            <div style={{ position: "absolute", top: "83mm", left: "54mm", width: "88mm" }}>
               {vaultPrintInvoice.tin}
             </div>
 
-            {/* Address */}
-            <div style={{ position: "absolute", top: "77mm", left: "30mm", width: "108mm" }}>
+            {/* ── Business Address ── */}
+            <div style={{ position: "absolute", top: "91mm", left: "54mm", width: "88mm", whiteSpace: "nowrap", overflow: "hidden" }}>
               {vaultPrintInvoice.businessAddress}
             </div>
 
-            {/* Items */}
+            {/* ── Items: first row at 103mm, row height 8mm ── */}
             {(vaultPrintInvoice.items || []).map((it: any, index: number) => (
-              <div
-                key={index}
-                style={{
-                  position: "absolute",
-                  top: `${95 + index * 6.5}mm`,
-                  left: "15mm",
-                  width: "120mm",
-                }}
-              >
-                <div style={{ position: "absolute", left: "0", width: "68mm", overflow: "hidden", whiteSpace: "nowrap" }}>
+              <div key={index} style={{ position: "absolute", top: `${103 + index * 8}mm`, left: "0", width: "148mm" }}>
+                <div style={{ position: "absolute", left: "14mm", width: "62mm", overflow: "hidden", whiteSpace: "nowrap" }}>
                   {it.itemDescription}
                 </div>
-                <div style={{ position: "absolute", left: "68mm", width: "14mm", textAlign: "center" }}>
+                <div style={{ position: "absolute", left: "79mm", width: "14mm", textAlign: "center" }}>
                   {it.quantity}
                 </div>
-                <div style={{ position: "absolute", left: "82mm", width: "20mm", textAlign: "right" }}>
+                <div style={{ position: "absolute", left: "95mm", width: "22mm", textAlign: "right" }}>
                   {Number(it.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
-                <div style={{ position: "absolute", left: "102mm", width: "18mm", textAlign: "right" }}>
+                <div style={{ position: "absolute", left: "119mm", width: "22mm", textAlign: "right" }}>
                   {Number(it.amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </div>
               </div>
             ))}
 
-            {/* VATable Sales */}
-            <div style={{ position: "absolute", bottom: "52mm", right: "20mm", textAlign: "right", width: "30mm" }}>
+            {/* ── VATable Sales ── */}
+            <div style={{ position: "absolute", top: "163mm", left: "62mm", width: "26mm", textAlign: "right" }}>
               {Number(vaultPrintInvoice.vatableSales || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
 
-            {/* VAT Amount */}
-            <div style={{ position: "absolute", bottom: "46mm", right: "20mm", textAlign: "right", width: "30mm" }}>
+            {/* ── VAT Amount ── */}
+            <div style={{ position: "absolute", top: "171mm", left: "62mm", width: "26mm", textAlign: "right" }}>
               {Number(vaultPrintInvoice.vatAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
 
-            {/* Total Due */}
-            <div style={{ position: "absolute", bottom: "40mm", right: "20mm", textAlign: "right", fontWeight: "bold", width: "30mm" }}>
+            {/* ── Total Amount Due ── */}
+            <div style={{ position: "absolute", top: "193mm", left: "106mm", width: "35mm", textAlign: "right", fontWeight: "bold" }}>
               {Number(vaultPrintInvoice.totalAmount_Due || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </div>
           </div>
@@ -1233,6 +1241,60 @@ export default function POS() {
           </div>
         )}
 
+        {/* ── CALIBRATION PREVIEW MODAL ── */}
+        {showCalibrationPreview && (
+          <div className="fixed inset-0 bg-black/80 z-[500] flex flex-col items-center justify-start overflow-y-auto py-8">
+            <div className="flex flex-col items-center gap-4">
+              <div className="flex items-center gap-4">
+                <p className="text-white font-bold text-lg">Print Layout Preview — your data overlaid on the form</p>
+                <button
+                  onClick={() => setShowCalibrationPreview(false)}
+                  className="bg-white text-black px-4 py-2 rounded font-bold"
+                >
+                  Close
+                </button>
+              </div>
+              {/* A5 container with form as background image, fields overlaid */}
+              <div
+                style={{
+                  position: "relative",
+                  width: "148mm",
+                  height: "210mm",
+                  backgroundImage: "url('/invoice-form.jpg')",
+                  backgroundSize: "100% 100%",
+                  backgroundRepeat: "no-repeat",
+                  fontFamily: "'Courier New', Courier, monospace",
+                  fontSize: "10pt",
+                  color: "red",
+                  boxShadow: "0 0 30px rgba(0,0,0,0.5)",
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{ position: "absolute", top: "43mm", left: "112mm", width: "32mm", fontWeight: "bold", fontSize: "13pt" }}>{invoiceNo}</div>
+                <div style={{ position: "absolute", top: "66mm", left: "107mm", width: "37mm" }}>{date}</div>
+                <div style={{ position: "absolute", top: "66mm", left: "44mm", width: "60mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.name}</div>
+                <div style={{ position: "absolute", top: "75mm", left: "54mm", width: "88mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.registeredName || customer.name}</div>
+                <div style={{ position: "absolute", top: "83mm", left: "54mm", width: "88mm" }}>{customer.tin}</div>
+                <div style={{ position: "absolute", top: "91mm", left: "54mm", width: "88mm", whiteSpace: "nowrap", overflow: "hidden" }}>{customer.address}</div>
+                {items.filter((i) => i.description.trim() !== "").map((item, index) => (
+                  <div key={index} style={{ position: "absolute", top: `${103 + index * 8}mm`, left: "0", width: "148mm" }}>
+                    <div style={{ position: "absolute", left: "14mm", width: "62mm", overflow: "hidden", whiteSpace: "nowrap" }}>{item.description}</div>
+                    <div style={{ position: "absolute", left: "79mm", width: "14mm", textAlign: "center" }}>{item.qty}</div>
+                    <div style={{ position: "absolute", left: "95mm", width: "22mm", textAlign: "right" }}>{Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    <div style={{ position: "absolute", left: "119mm", width: "22mm", textAlign: "right" }}>{(item.qty * item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                  </div>
+                ))}
+                <div style={{ position: "absolute", top: "163mm", left: "62mm", width: "26mm", textAlign: "right" }}>{vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ position: "absolute", top: "171mm", left: "62mm", width: "26mm", textAlign: "right" }}>{vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                <div style={{ position: "absolute", top: "193mm", left: "106mm", width: "35mm", textAlign: "right", fontWeight: "bold" }}>{totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+              </div>
+              <p className="text-yellow-300 text-sm max-w-md text-center">
+                Red text shows where your data will print. If any value is misaligned, tell me by how many mm to move it (e.g. "invoice number 3mm left, 2mm down").
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── MAIN INVOICE PRINT AREA (A5 absolute positioning for pre-printed form) ── */}
         <div
           id="print-area"
@@ -1241,7 +1303,8 @@ export default function POS() {
             position: "relative",
             width: "148mm",
             height: "210mm",
-            margin: "0 auto",
+            margin: "0",
+            padding: "0",
             overflow: "hidden",
             background: "white",
             fontFamily: "'Courier New', Courier, monospace",
@@ -1249,73 +1312,70 @@ export default function POS() {
             color: "black",
           }}
         >
-          {/* Invoice Number — top: 45mm; right: 20mm */}
-          <div style={{ position: "absolute", top: "45mm", right: "20mm", fontWeight: "bold" }}>
+          {/* ── Invoice Number — right of pre-printed "No." ── */}
+          <div style={{ position: "absolute", top: "43mm", left: "112mm", width: "32mm", fontWeight: "bold", fontSize: "13pt" }}>
             {invoiceNo}
           </div>
 
-          {/* Date — top: 45mm; right: 60mm */}
-          <div style={{ position: "absolute", top: "45mm", right: "60mm" }}>
+          {/* ── Date — right side of "SOLD TO:" row, after pre-printed "Date:" ── */}
+          <div style={{ position: "absolute", top: "66mm", left: "107mm", width: "37mm" }}>
             {date}
           </div>
 
-          {/* Customer Name — top: 65mm; left: 30mm */}
-          <div style={{ position: "absolute", top: "65mm", left: "30mm", width: "108mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+          {/* ── Customer/Sold To name — left portion of "SOLD TO:" row ── */}
+          <div style={{ position: "absolute", top: "66mm", left: "44mm", width: "60mm", whiteSpace: "nowrap", overflow: "hidden" }}>
             {customer.name}
           </div>
 
-          {/* TIN — top: 71mm; left: 30mm */}
-          <div style={{ position: "absolute", top: "71mm", left: "30mm", width: "108mm" }}>
+          {/* ── Registered Name value — after "Registered Name :" label ── */}
+          <div style={{ position: "absolute", top: "75mm", left: "54mm", width: "88mm", whiteSpace: "nowrap", overflow: "hidden" }}>
+            {customer.registeredName || customer.name}
+          </div>
+
+          {/* ── TIN value — after "TIN :" label ── */}
+          <div style={{ position: "absolute", top: "83mm", left: "54mm", width: "88mm" }}>
             {customer.tin}
           </div>
 
-          {/* Address — top: 77mm; left: 30mm */}
-          <div style={{ position: "absolute", top: "77mm", left: "30mm", width: "108mm" }}>
+          {/* ── Business Address — after "Business Address :" label ── */}
+          <div style={{ position: "absolute", top: "91mm", left: "54mm", width: "88mm", whiteSpace: "nowrap", overflow: "hidden" }}>
             {customer.address}
           </div>
 
-          {/* Items — table container at top: 95mm; left: 15mm; width: 120mm */}
+          {/* ── Items: first row at 103mm, row height 8mm ── */}
           {items.filter((i) => i.description.trim() !== "").map((item, index) => (
-            <div
-              key={index}
-              style={{
-                position: "absolute",
-                top: `${95 + index * 6.5}mm`,
-                left: "15mm",
-                width: "120mm",
-              }}
-            >
+            <div key={index} style={{ position: "absolute", top: `${103 + index * 8}mm`, left: "0", width: "148mm" }}>
               {/* Description */}
-              <div style={{ position: "absolute", left: "0", width: "68mm", overflow: "hidden", whiteSpace: "nowrap" }}>
+              <div style={{ position: "absolute", left: "14mm", width: "62mm", overflow: "hidden", whiteSpace: "nowrap" }}>
                 {item.description}
               </div>
               {/* Qty */}
-              <div style={{ position: "absolute", left: "68mm", width: "14mm", textAlign: "center" }}>
+              <div style={{ position: "absolute", left: "79mm", width: "14mm", textAlign: "center" }}>
                 {item.qty}
               </div>
               {/* Unit Price */}
-              <div style={{ position: "absolute", left: "82mm", width: "20mm", textAlign: "right" }}>
+              <div style={{ position: "absolute", left: "95mm", width: "22mm", textAlign: "right" }}>
                 {Number(item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               {/* Amount */}
-              <div style={{ position: "absolute", left: "102mm", width: "18mm", textAlign: "right" }}>
+              <div style={{ position: "absolute", left: "119mm", width: "22mm", textAlign: "right" }}>
                 {(item.qty * item.price).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
             </div>
           ))}
 
-          {/* VATable Sales — bottom: 52mm; right: 20mm */}
-          <div style={{ position: "absolute", bottom: "52mm", right: "20mm", textAlign: "right", width: "30mm" }}>
+          {/* ── VATable Sales — left summary column value box ── */}
+          <div style={{ position: "absolute", top: "163mm", left: "62mm", width: "26mm", textAlign: "right" }}>
             {vatableSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
 
-          {/* VAT Amount — bottom: 46mm; right: 20mm */}
-          <div style={{ position: "absolute", bottom: "46mm", right: "20mm", textAlign: "right", width: "30mm" }}>
+          {/* ── VAT Amount (12%) — left summary column, row below VATable Sales ── */}
+          <div style={{ position: "absolute", top: "171mm", left: "62mm", width: "26mm", textAlign: "right" }}>
             {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
 
-          {/* Total Amount Due — bottom: 40mm; right: 20mm */}
-          <div style={{ position: "absolute", bottom: "40mm", right: "20mm", textAlign: "right", fontWeight: "bold", width: "30mm" }}>
+          {/* ── Total Amount Due — right summary column, TOTAL AMOUNT DUE row ── */}
+          <div style={{ position: "absolute", top: "193mm", left: "106mm", width: "35mm", textAlign: "right", fontWeight: "bold" }}>
             {totalAmount_Due.toLocaleString(undefined, { minimumFractionDigits: 2 })}
           </div>
         </div>
