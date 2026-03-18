@@ -944,10 +944,15 @@ export default function Accounting() {
             <form onSubmit={handleAddBill} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Vendor Name</label>
-                <input type="text" required placeholder="Supplier name"
+                <input list="ap-vendor-list" required placeholder="Select or type supplier"
                   className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                   value={newBill.vendorName} onChange={(e) => setNewBill({ ...newBill, vendorName: e.target.value })}
                   data-testid="input-ap-vendor" />
+                <datalist id="ap-vendor-list">
+                  {vendors.map((v) => (
+                    <option key={v.id} value={v.name} />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="block text-xs font-semibold text-gray-500 mb-1">Invoice No.</label>
