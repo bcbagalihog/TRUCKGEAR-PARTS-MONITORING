@@ -66,6 +66,8 @@ export const customers = pgTable("customers", {
   phone: text("phone"),
   address: text("address"),
   tin: text("tin"),
+  branchArea: text("branch_area"),
+  internalRemarks: text("internal_remarks"),
 });
 
 export const vendors = pgTable("vendors", {
@@ -272,6 +274,9 @@ export const salesInvoices = pgTable("sales_invoices", {
   ),
   companyId: integer("company_id").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow(),
+  customerId: integer("customer_id").references(() => customers.id),
+  branchArea: text("branch_area"),
+  internalRemarks: text("internal_remarks"),
 });
 
 export const salesInvoiceItems = pgTable("sales_invoice_items", {

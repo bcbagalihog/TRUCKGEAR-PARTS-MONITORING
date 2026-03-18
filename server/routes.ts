@@ -667,6 +667,18 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/billing-collections/:id", isAuthenticated, async (req, res) => {
+    try {
+      await db.delete(billingCollectionItems).where(eq(billingCollectionItems.billingCollectionId, Number(req.params.id)));
+      await db.delete(billingCollectionPayments).where(eq(billingCollectionPayments.billingCollectionId, Number(req.params.id)));
+      await db.delete(billingCollections).where(eq(billingCollections.id, Number(req.params.id)));
+      res.json({ success: true });
+    } catch (e) {
+      console.error("bc delete error:", e);
+      res.status(500).json({ message: "Failed to delete billing collection" });
+    }
+  });
+
   // --- Admin: User Management ---
   // --- Supplier Checks Report ---
   app.get("/api/supplier-checks-report", isAuthenticated, async (req, res) => {
@@ -822,23 +834,23 @@ export async function registerRoutes(
           registeredName: invoice.customer?.name || "Walk-in Customer",
           tin: invoice.customer?.tin || "",
           businessAddress: invoice.customer?.address || "",
-          "totalAmount_Due": String(invoice.totalAmountDue ?? invoice.totalAmount_Due ?? 0),
-          vatableSales: invoice.vatableSales ? String(invoice.vatableSales) : null,
-          vatAmount: invoice.vatAmount ? String(invoice.vatAmount) : null,
-          withholdingTax: invoice.withholdingTax ? String(invoice.withholdingTax) : null,
+          "totalAmount_Due": String(Number(invoice.totalAmountDue ?? invoice.totalAmount_Due ?? 0).toFixed(2)),
+          vatableSales: invoice.vatableSales ? String(Number(invoice.vatableSales).toFixed(2)) : null,
+          vatAmount: invoice.vatAmount ? String(Number(invoice.vatAmount).toFixed(2)) : null,
+          withholdingTax: invoice.withholdingTax ? String(Number(invoice.withholdingTax).toFixed(2)) : null,
           drawerSessionId: invoice.drawerSessionId || null,
           paymentMethod: method,
           status: isNet ? "UNPAID" : "PAID",
-          // GCash
           gcashRef: method === "GCASH" ? (invoice.gcashRef || null) : null,
-          // Check
           checkBankName: method === "CHECK" ? (invoice.checkBankName || null) : null,
           checkNumber: method === "CHECK" ? (invoice.checkNumber || null) : null,
           checkMaturityDate: method === "CHECK" ? (invoice.checkMaturityDate || null) : null,
-          // NET Days
           netDays: isNet ? (invoice.netDays || null) : null,
           poNumber: isNet ? (invoice.poNumber || null) : null,
           companyId: 1,
+          customerId: invoice.customer?.id || null,
+          branchArea: invoice.customer?.branchArea || null,
+          internalRemarks: invoice.customer?.internalRemarks || null,
         })
         .returning();
 
@@ -870,6 +882,28 @@ export async function registerRoutes(
             referenceId: newInv.id,
           });
         }
+      }
+
+      // Feature 6: Auto-create billing collection for NET_DAYS invoices
+      if (isNet) {
+        const totalDue = Number(invoice.totalAmountDue ?? invoice.totalAmount_Due ?? 0);
+        const [bc] = await db.insert(billingCollections).values({
+          customerName: invoice.customer?.name || "Walk-in Customer",
+          customerTin: invoice.customer?.tin || null,
+          customerAddress: invoice.customer?.address || null,
+          collectionDate: new Date().toISOString().split("T")[0],
+          totalAmount: String(totalDue.toFixed(2)),
+          amountPaid: "0",
+          status: "ACTIVE",
+          companyId: 1,
+        }).returning();
+        await db.insert(billingCollectionItems).values({
+          billingCollectionId: bc.id,
+          salesInvoiceId: newInv.id,
+          drNo: null,
+          poNo: invoice.poNumber || null,
+          amount: String(totalDue.toFixed(2)),
+        });
       }
 
       res.json({ success: true, invoiceId: newInv.id, invoiceNumber: newInv.invoiceNumber });

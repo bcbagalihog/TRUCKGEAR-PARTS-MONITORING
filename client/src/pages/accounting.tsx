@@ -7,6 +7,8 @@ import {
   ScanLine,
   Loader2,
   ChevronLeft,
+  ChevronDown,
+  ChevronRight,
   Home,
   Lock,
   Printer,
@@ -22,6 +24,10 @@ import {
   Zap,
   Archive,
   Eye,
+  FolderOpen,
+  Folder,
+  CheckCircle,
+  Circle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useLocation } from "wouter";
@@ -306,10 +312,22 @@ export default function Accounting() {
   const [isSavingReceiptEdit, setIsSavingReceiptEdit] = useState(false);
   const [showArchivedCr, setShowArchivedCr] = useState(false);
 
+  // ── AP Accordion ─────────────────────────────────────────────────────────
+  const [expandedVendors, setExpandedVendors] = useState<Set<string>>(new Set());
+  const toggleVendorFolder = (name: string) => {
+    setExpandedVendors(prev => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  };
+
   // ── Billing Collection Vault ──────────────────────────────────────────────
   const [billingVault, setBillingVault] = useState<any[]>([]);
   const [billingVaultLoading, setBillingVaultLoading] = useState(false);
   const [showArchivedBilling, setShowArchivedBilling] = useState(false);
+  const [deletingBc, setDeletingBc] = useState<any | null>(null);
+  const [isDeletingBc, setIsDeletingBc] = useState(false);
 
   // ── Customer / Vendor dropdowns ───────────────────────────────────────────
   const [customers, setCustomers] = useState<any[]>([]);
@@ -464,6 +482,36 @@ export default function Accounting() {
       else fetchBillingVault();
     } catch {
       toast({ title: "Error", variant: "destructive" });
+    }
+  };
+
+  const handleSetBcStatus = async (id: number, status: "PAID" | "UNPAID" | "ACTIVE") => {
+    try {
+      await fetch(`/api/billing-collections/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      toast({ title: `Marked as ${status}` });
+      fetchBillingVault(showArchivedBilling);
+    } catch {
+      toast({ title: "Error", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteBillingCollection = async () => {
+    if (!deletingBc?.id) return;
+    setIsDeletingBc(true);
+    try {
+      const res = await fetch(`/api/billing-collections/${deletingBc.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setDeletingBc(null);
+      fetchBillingVault(showArchivedBilling);
+      toast({ title: "Deleted", description: "Billing collection removed." });
+    } catch {
+      toast({ title: "Error", variant: "destructive" });
+    } finally {
+      setIsDeletingBc(false);
     }
   };
 
@@ -962,64 +1010,86 @@ export default function Accounting() {
               </div>
             </div>
 
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-bold">
-                  <th className="px-4 py-3">Invoice Date</th>
-                  <th className="px-4 py-3">Invoice No.</th>
-                  <th className="px-4 py-3">Vendor</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Amount</th>
-                  <th className="px-4 py-3 w-12"></th>
-                </tr>
-              </thead>
-              <tbody className="text-sm divide-y divide-gray-100">
-                {loadingBills ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></td></tr>
-                ) : bills.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No records found.</td></tr>
-                ) : bills.map((bill) => (
-                  <tr key={bill.id} className="hover:bg-gray-50 transition-colors" data-testid={`row-ap-${bill.id}`}>
-                    <td className="px-4 py-3 text-gray-600 text-xs">
-                      {bill.invoiceDate ? new Date(bill.invoiceDate).toLocaleDateString("en-PH") : "-"}
-                    </td>
-                    <td className="px-4 py-3 font-mono font-bold text-blue-700">{bill.invoiceNumber}</td>
-                    <td className="px-4 py-3 text-gray-800 font-medium">{bill.vendorName}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusColor(bill.status)}`}>
-                        {bill.status.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">
-                      ₱{Number(bill.amountDue).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => setEditingBill(bill)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors" data-testid={`edit-ap-${bill.id}`}>
-                          <Pencil className="h-3.5 w-3.5" />
+            {/* AP Vendor Accordion */}
+            {loadingBills ? (
+              <div className="px-4 py-8 text-center text-gray-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+            ) : bills.length === 0 ? (
+              <div className="px-4 py-8 text-center text-gray-400">No records found.</div>
+            ) : (() => {
+              // Group bills by vendor
+              const grouped: Record<string, Bill[]> = {};
+              bills.forEach(b => { if (!grouped[b.vendorName]) grouped[b.vendorName] = []; grouped[b.vendorName].push(b); });
+              const vendorNames = Object.keys(grouped).sort();
+              return (
+                <div className="divide-y divide-gray-100">
+                  {vendorNames.map(vendorName => {
+                    const vendorBills = grouped[vendorName];
+                    const vendorTotal = vendorBills.reduce((s, b) => s + Number(b.amountDue), 0);
+                    const vendorInfo = vendors.find(v => v.name.toUpperCase() === vendorName.toUpperCase());
+                    const isOpen = expandedVendors.has(vendorName);
+                    return (
+                      <div key={vendorName}>
+                        {/* Vendor Folder Header */}
+                        <button onClick={() => toggleVendorFolder(vendorName)}
+                          className="w-full flex items-center gap-3 px-5 py-3 bg-gray-50 hover:bg-blue-50 transition-colors text-left">
+                          {isOpen ? <FolderOpen className="h-4 w-4 text-blue-600 shrink-0" /> : <Folder className="h-4 w-4 text-gray-400 shrink-0" />}
+                          <span className="font-bold text-gray-800 text-sm flex-1">{vendorName}</span>
+                          {vendorInfo?.tin && <span className="text-xs text-gray-400 font-mono">TIN: {vendorInfo.tin}</span>}
+                          <span className="text-xs bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 font-bold">{vendorBills.length} invoice{vendorBills.length !== 1 ? "s" : ""}</span>
+                          <span className="text-sm font-bold text-gray-900 min-w-[100px] text-right">₱{vendorTotal.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                          {isOpen ? <ChevronDown className="h-4 w-4 text-gray-400 shrink-0" /> : <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />}
                         </button>
-                        <button onClick={() => setDeletingBill(bill)} className="p-1 text-gray-400 hover:text-red-600 transition-colors" data-testid={`delete-ap-${bill.id}`}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {/* Expanded Invoice List */}
+                        {isOpen && (
+                          <div className="bg-white">
+                            {vendorInfo && (vendorInfo.address || vendorInfo.tin) && (
+                              <div className="px-8 py-2 bg-blue-50 border-b border-blue-100 text-xs text-gray-500">
+                                {vendorInfo.address && <span className="mr-4">📍 {vendorInfo.address}</span>}
+                                {vendorInfo.tin && <span>TIN: {vendorInfo.tin}</span>}
+                              </div>
+                            )}
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-gray-50 border-b text-xs uppercase tracking-wider text-gray-400 font-bold">
+                                  <th className="px-8 py-2">Date</th>
+                                  <th className="px-4 py-2">Invoice No.</th>
+                                  <th className="px-4 py-2">Status</th>
+                                  <th className="px-4 py-2 text-right">Amount</th>
+                                  <th className="px-4 py-2 w-12"></th>
+                                </tr>
+                              </thead>
+                              <tbody className="text-sm divide-y divide-gray-100">
+                                {vendorBills.map(bill => (
+                                  <tr key={bill.id} className="hover:bg-gray-50 transition-colors" data-testid={`row-ap-${bill.id}`}>
+                                    <td className="px-8 py-2.5 text-gray-500 text-xs">{bill.invoiceDate ? new Date(bill.invoiceDate).toLocaleDateString("en-PH") : "-"}</td>
+                                    <td className="px-4 py-2.5 font-mono font-bold text-blue-700">{bill.invoiceNumber}</td>
+                                    <td className="px-4 py-2.5">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${statusColor(bill.status)}`}>{bill.status.replace("_", " ")}</span>
+                                    </td>
+                                    <td className="px-4 py-2.5 text-right font-bold text-gray-900">₱{Number(bill.amountDue).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-4 py-2.5 text-center">
+                                      <div className="flex items-center justify-center gap-1">
+                                        <button onClick={() => setEditingBill(bill)} className="p-1 text-gray-400 hover:text-blue-600 transition-colors" data-testid={`edit-ap-${bill.id}`}><Pencil className="h-3.5 w-3.5" /></button>
+                                        <button onClick={() => setDeletingBill(bill)} className="p-1 text-gray-400 hover:text-red-600 transition-colors" data-testid={`delete-ap-${bill.id}`}><Trash2 className="h-3.5 w-3.5" /></button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              {bills.length > 0 && (
-                <tfoot>
-                  <tr className="bg-gray-50 border-t border-gray-200">
-                    <td colSpan={4} className="px-4 py-2 text-xs font-bold text-gray-500 uppercase">
-                      Total ({bills.length} records)
-                    </td>
-                    <td className="px-4 py-2 text-right font-bold text-gray-900">
-                      ₱{bills.reduce((s, b) => s + Number(b.amountDue), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+                    );
+                  })}
+                  {/* Grand Total Footer */}
+                  <div className="px-5 py-3 bg-gray-50 flex justify-between items-center border-t border-gray-200">
+                    <span className="text-xs font-bold text-gray-500 uppercase">Grand Total ({bills.length} invoices, {vendorNames.length} vendors)</span>
+                    <span className="font-bold text-gray-900">₱{bills.reduce((s, b) => s + Number(b.amountDue), 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1172,18 +1242,37 @@ export default function Accounting() {
                           <td className="px-4 py-3 text-right text-green-700 font-semibold">₱{Number(bc.amountPaid || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
                           <td className="px-4 py-3 text-right font-bold text-red-700">₱{balance.toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td>
                           <td className="px-4 py-3 text-center">
-                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${bc.status === "ARCHIVED" ? "bg-gray-100 text-gray-500" : "bg-green-100 text-green-700"}`}>
-                              {bc.status === "ARCHIVED" ? "ARCHIVED" : "ACTIVE"}
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                              bc.status === "ARCHIVED" ? "bg-gray-100 text-gray-500"
+                              : bc.status === "PAID" ? "bg-emerald-100 text-emerald-700"
+                              : bc.status === "UNPAID" ? "bg-red-100 text-red-700"
+                              : "bg-blue-100 text-blue-700"
+                            }`}>
+                              {bc.status || "ACTIVE"}
                             </span>
                           </td>
                           <td className="px-4 py-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
+                            <div className="flex items-center justify-center gap-1 flex-wrap">
                               <button
                                 onClick={() => setPaymentModal({ type: "bc", id: bc.id, label: bc.customerName, totalAmount: Number(bc.totalAmount), amountPaid: Number(bc.amountPaid || 0) })}
                                 title="Record Payment"
-                                className="p-1.5 text-green-500 hover:bg-green-50 hover:text-green-700 rounded-md transition-colors text-xs font-medium"
+                                className="p-1.5 text-green-500 hover:bg-green-50 hover:text-green-700 rounded-md transition-colors"
                               >
                                 <Plus className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleSetBcStatus(bc.id, "PAID")}
+                                title="Mark as Paid"
+                                className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleSetBcStatus(bc.id, "UNPAID")}
+                                title="Mark as Unpaid"
+                                className="p-1.5 text-amber-500 hover:bg-amber-50 rounded-md transition-colors"
+                              >
+                                <Circle className="h-3.5 w-3.5" />
                               </button>
                               <button
                                 onClick={() => handleArchiveToggle("bc", bc.id, bc.status)}
@@ -1191,6 +1280,13 @@ export default function Accounting() {
                                 className="p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 rounded-md transition-colors"
                               >
                                 <Archive className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeletingBc(bc)}
+                                title="Delete"
+                                className="p-1.5 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           </td>
@@ -2356,6 +2452,34 @@ export default function Accounting() {
           </div>
         </div>
       )}
+      {/* ── DELETE BILLING COLLECTION CONFIRMATION ── */}
+      {deletingBc && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Delete Billing Collection</h3>
+                <p className="text-sm text-gray-500">This cannot be undone.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-6">
+              Delete billing collection for <span className="font-bold text-gray-900">{deletingBc.customerName}</span> amounting to{" "}
+              <span className="font-bold">₱{Number(deletingBc.totalAmount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</span>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setDeletingBc(null)} className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50">Cancel</button>
+              <button onClick={handleDeleteBillingCollection} disabled={isDeletingBc}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50">
+                {isDeletingBc ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── PAYMENT RECORDING MODAL ── */}
       {paymentModal && (
         <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">

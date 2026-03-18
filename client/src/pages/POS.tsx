@@ -48,6 +48,9 @@ export default function POS() {
     tin: "",
     address: "",
     type: "CASH SALES",
+    branchArea: "",
+    internalRemarks: "",
+    id: null as number | null,
   });
   const [withholdingTaxRate, setWithholdingTaxRate] = useState(0);
   const [items, setItems] = useState<{ description: string; qty: number; price: number; productId?: number }[]>([{ description: "", qty: 1, price: 0 }]);
@@ -356,7 +359,7 @@ export default function POS() {
       // Reset form
       setItems([{ description: "", qty: 1, price: 0 }]);
       setInvoiceNo("");
-      setCustomer({ name: "", tin: "", address: "", type: "CASH SALES" });
+      setCustomer({ name: "", tin: "", address: "", type: "CASH SALES", branchArea: "", internalRemarks: "", id: null });
       setGcashRef("");
       setCheckBankName("");
       setCheckNumber("");
@@ -608,6 +611,29 @@ export default function POS() {
                     onChange={(e) =>
                       setWithholdingTaxRate(Number(e.target.value))
                     }
+                  />
+                </div>
+              </div>
+              {/* Internal Branch Tracking - NOT PRINTED */}
+              <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-1">
+                <div>
+                  <label className="block text-xs font-bold text-amber-600 uppercase mb-1">Branch / Area <span className="text-gray-400 normal-case font-normal">(internal only)</span></label>
+                  <input
+                    type="text"
+                    className="w-full border border-amber-200 bg-amber-50 p-2 rounded outline-none text-sm"
+                    placeholder="e.g. Makati Branch"
+                    value={customer.branchArea}
+                    onChange={(e) => setCustomer({ ...customer, branchArea: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-amber-600 uppercase mb-1">Internal Remarks <span className="text-gray-400 normal-case font-normal">(not printed)</span></label>
+                  <input
+                    type="text"
+                    className="w-full border border-amber-200 bg-amber-50 p-2 rounded outline-none text-sm"
+                    placeholder="e.g. spot buy, referred by..."
+                    value={customer.internalRemarks}
+                    onChange={(e) => setCustomer({ ...customer, internalRemarks: e.target.value })}
                   />
                 </div>
               </div>

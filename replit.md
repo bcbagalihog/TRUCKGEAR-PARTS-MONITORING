@@ -25,9 +25,11 @@ Includes inventory tracking with OEM cross-referencing, sales orders, purchase o
 - **Shopify Integration**: Connect to Shopify store to import/export products, view orders, compare inventory levels
 - **Product Images**: Upload product images with preview, stored in /uploads directory
 - **POS Payment Methods**: Cash, GCash (ref#), Check (bank/checkNo/maturityDate), NET Days (days/PO# → saves as UNPAID → links to Billing Collection)
+- **Branch/Area Tracking**: POS supports internal Branch/Area + Internal Remarks fields (amber-highlighted, stored in DB, never printed on invoice). Linked to customer_id in sales_invoices table.
+- **Financial Precision**: All POS totals (totalAmountDue, vatableSales, vatAmount, withholdingTax) force-rounded to 2 decimal places before saving.
 - **Accounting Module** (PIN: 8888): Four tabs:
-  - Accounts Payable: daily invoice log with PENDING_COUNTER/COUNTERED statuses, quick-add form, AI scan, vendor/status filters
-  - Billing Collection: customer dropdown (auto-fills TIN/address), select UNPAID invoices, generate PDF (logo/table/yellow total), saves billing collection to DB with payment tracking + archive toggle; Billing Collection Vault shows active/archived collections with balance tracking
+  - Accounts Payable: Vendor folder/accordion view — invoices grouped by supplier with expandable rows showing TIN/address auto-filled from Vendor Directory. Total per vendor + grand total footer.
+  - Billing Collection: customer dropdown (auto-fills TIN/address), select UNPAID invoices, generate PDF (logo/table/yellow total), saves billing collection to DB with payment tracking + archive toggle; NET_DAYS POS invoices auto-create a billing_collection entry; Billing Collection Vault shows ACTIVE/PAID/UNPAID/ARCHIVED status badges with Record Payment (+), Mark Paid (✓), Mark Unpaid (○), Archive, and Delete actions per row.
   - Supplier Counter Receipt: vendor dropdown (auto-fills TIN/address), fetch AP invoices, Installment Generator (split total into N weekly checks), save & mark COUNTERED, PDF export; Counter Receipt Vault shows active/archived receipts with Paid/Balance columns, payment recording, archive toggle
   - Check Summary: registry of all CHECK payment invoices from POS (bank, check no., maturity date, amount)
 - **PDF Generation**: jsPDF + jspdf-autotable; Billing Collection PDF has company logo, BILLING COLLECTION title, Date/Invoice/DR/PO/Amount table, yellow total box. Counter Receipt PDF has check details table and yellow total box.

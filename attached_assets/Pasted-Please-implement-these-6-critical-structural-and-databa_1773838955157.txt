@@ -1,0 +1,39 @@
+Please implement these 6 critical structural and database fixes. CRUCIAL: Do not change any existing top, left, or mm coordinates in the @media print sections of pos.tsx or vatinvoice.tsx, as the physical alignment is already calibrated.
+
+1. Accounts Payable Folder System (Vendor Grouping):
+
+In the Accounts Payable module, group all outstanding items into folders/accordions sorted by Vendor.
+
+Clicking a Vendor folder must expand to show all individual unpaid invoices/items for that specific supplier. Link this view strictly to the Vendor Directory to auto-fill TIN and Address.
+
+2. Financial Precision:
+
+Update all POS and Accounting calculations to force Two-Decimal Rounding (00.00). Ensure totalAmountDue, vatableSales, and vatAmount consistently display and save with exactly two decimal places.
+
+3. Internal Branch Tracking (System Only, No Print):
+
+Database: Link the 'Registered Name' to the Customer Directory. Add internal fields: company_name, branch_area, and internal_remarks.
+
+Logic: Treat customers with the same 'Registered Name' but different 'Branch/Area' as separate billing entities so their payments and ledgers do not mix.
+
+Print Protection: Ensure branch_area and internal_remarks NEVER appear on the printed Invoice. The printed output must only show the official Registered Name, TIN, and Address.
+
+4. Advanced Billing Vault Management:
+
+In the Billing Collection vault, items must remain visible/editable even after being marked.
+
+Add a management menu for each vaulted item: Edit, Delete, Save, Set as Paid, and Set as Unpaid.
+
+Add specific payment logging options: 'Paid per Item', 'Paid via Invoice', and 'Paid via P.O.'. Once fully paid, provide an option to Archive the record to hide it from the active list.
+
+5. POS-Inventory-P.O. Integration:
+
+Inventory Link: Ensure POS sales automatically deduct quantities from the inventory table.
+
+Spot Buy Logic: If an item is not in inventory, allow it to be entered as a 'Custom Item' in the POS.
+
+P.O. Link: Automatically link these 'Custom Items' to a Purchase Order tracker so we can identify the source supplier for that specific spot-buy sale.
+
+6. Global Data Wiring:
+
+Ensure that finalizing a 'NET 30' sale in the POS automatically creates an 'Unpaid' entry in the billing_collections table, correctly mapped to the specific Branch/Area entity."
