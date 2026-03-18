@@ -66,6 +66,9 @@ export function useUpdateSalesStatus() {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.salesOrders.list.path] });
       queryClient.invalidateQueries({ queryKey: [api.salesOrders.get.path, variables.id] });
+      // When invoiced, stock decreases — refresh inventory and dashboard
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
     },
   });
 }
@@ -206,6 +209,9 @@ export function useUpdatePurchaseStatus() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [api.purchaseOrders.list.path] });
+      // When received, stock increases — refresh inventory and dashboard
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
     },
   });
 }

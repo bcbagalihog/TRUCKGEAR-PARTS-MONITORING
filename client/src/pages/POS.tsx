@@ -376,6 +376,11 @@ export default function POS() {
       if (!res.ok) throw new Error();
       const label = paymentMethod === "NET_DAYS" ? "Invoice saved as UNPAID (NET Days)" : "Invoice Vaulted";
       toast({ title: label });
+      // Invalidate all affected caches so inventory and dashboard reflect the sale
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sales-invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/billing-collections"] });
       window.print();
       // Reset form
       setItems([{ description: "", qty: 1, price: 0 }]);
