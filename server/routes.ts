@@ -723,6 +723,50 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/admin/users/:id", isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.updateUser(req.params.id, req.body);
+      res.json(user);
+    } catch (e) {
+      console.error("admin update user error:", e);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.delete("/api/admin/users/:id", isAuthenticated, async (req, res) => {
+    try {
+      const sessionUserId = (req.session as any).userId;
+      if (req.params.id === sessionUserId) {
+        return res.status(400).json({ message: "Cannot delete your own account" });
+      }
+      await storage.deleteUser(req.params.id);
+      res.json({ success: true });
+    } catch (e) {
+      console.error("admin delete user error:", e);
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  app.get("/api/companies", isAuthenticated, async (req, res) => {
+    try {
+      const list = await storage.getCompanies();
+      res.json(list);
+    } catch (e) {
+      console.error("companies error:", e);
+      res.status(500).json({ message: "Failed to fetch companies" });
+    }
+  });
+
+  app.put("/api/companies/:id", isAuthenticated, async (req, res) => {
+    try {
+      const company = await storage.upsertCompany(Number(req.params.id), req.body);
+      res.json(company);
+    } catch (e) {
+      console.error("company upsert error:", e);
+      res.status(500).json({ message: "Failed to save company" });
+    }
+  });
+
   // --- Sales Invoices List (for Billing Collection & Check Summary) ---
   app.get("/api/sales-invoices", isAuthenticated, async (req, res) => {
     try {

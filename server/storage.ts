@@ -1,4 +1,5 @@
 import { 
+  companies,
   products, productOemNumbers, productCompatibility,
   customers, vendors, salesOrders, salesOrderItems, purchaseOrders, purchaseOrderItems,
   inventoryTransactions, salesInvoices, salesInvoiceItems, drawerSessions, accountsPayable,
@@ -103,6 +104,12 @@ export interface IStorage extends IAuthStorage {
   getAllUsers(): Promise<any[]>;
   createAdminUser(data: any): Promise<any>;
   toggleUserStatus(id: string, isActive: boolean): Promise<any>;
+  updateUser(id: string, data: any): Promise<any>;
+  deleteUser(id: string): Promise<void>;
+
+  // Companies
+  getCompanies(): Promise<any[]>;
+  upsertCompany(id: number, data: any): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -807,6 +814,42 @@ export class DatabaseStorage implements IStorage {
         isActive: users.isActive,
       });
     return user;
+  }
+
+  async updateUser(id: string, data: any): Promise<any> {
+    const updates: any = {};
+    if (data.firstName !== undefined) updates.firstName = data.firstName;
+    if (data.lastName !== undefined) updates.lastName = data.lastName;
+    if (data.role !== undefined) updates.role = data.role;
+    if (data.companyId !== undefined) updates.companyId = Number(data.companyId);
+    if (data.password) {
+      const bcrypt = await import("bcrypt");
+      updates.password = await bcrypt.hash(data.password, 10);
+    }
+    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning({
+      id: users.id, username: users.username, firstName: users.firstName,
+      lastName: users.lastName, role: users.role, companyId: users.companyId, isActive: users.isActive,
+    });
+    return user;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  async getCompanies(): Promise<any[]> {
+    return db.select().from(companies).orderBy(companies.id);
+  }
+
+  async upsertCompany(id: number, data: any): Promise<any> {
+    const existing = await db.select().from(companies).where(eq(companies.id, id));
+    if (existing.length > 0) {
+      const [updated] = await db.update(companies).set(data).where(eq(companies.id, id)).returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(companies).values({ id, ...data }).returning();
+      return created;
+    }
   }
 
   async getSupplierChecksReport(startDate?: string, endDate?: string): Promise<{ checkId: number; counterReceiptId: number; vendorName: string; checkNo: string | null; bank: string | null; checkDate: string | null; amount: string }[]> {

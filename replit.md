@@ -34,6 +34,8 @@ Includes inventory tracking with OEM cross-referencing, sales orders, purchase o
   - Check Summary: registry of all CHECK payment invoices from POS (bank, check no., maturity date, amount)
 - **PDF Generation**: jsPDF + jspdf-autotable; Billing Collection PDF has company logo, BILLING COLLECTION title, Date/Invoice/DR/PO/Amount table, yellow total box. Counter Receipt PDF has check details table and yellow total box.
 - **Purchase Orders**: soldTo and remarks fields in PO form (hidden from PDF print output)
+- **User Management (Full)**: Edit user (name, role, company, password reset), Delete user with confirm dialog, two-tab layout (User Accounts + Company Settings)
+- **Company Settings**: Two company profiles (Truckgear + Sister Company) with Name, Address, Phone, TIN, and Logo upload stored in `companies` DB table
 
 ## Project Structure
 ```
@@ -101,7 +103,8 @@ client/src/
 - `/api/sales-invoices/bulk-status` (PATCH) - bulk update invoice status (e.g. mark as BILLED)
 - `/api/accounts-payable` (GET, POST), `/api/accounts-payable/:id` (PUT), `/api/accounts-payable/:id/receive` (POST)
 - `/api/counter-receipts` (GET, POST), `/api/counter-receipts/:id` (GET)
-- `/api/admin/users` (GET, POST), `/api/admin/users/:id/toggle-status` (PATCH)
+- `/api/admin/users` (GET, POST), `/api/admin/users/:id` (PUT, DELETE), `/api/admin/users/:id/toggle-status` (PATCH)
+- `/api/companies` (GET), `/api/companies/:id` (PUT) - company profile management
 - `/api/pos/drawer-open` (POST), `/api/pos/drawer-close` (POST), `/api/pos/drawer-status` (GET), `/api/pos/expense` (POST)
 
 ## Docker Deployment

@@ -19,6 +19,16 @@ import { z } from "zod";
 import { users } from "./models/auth";
 export * from "./models/auth";
 
+// === COMPANIES ===
+export const companies = pgTable("companies", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  address: text("address"),
+  phone: text("phone"),
+  tin: text("tin"),
+  logoUrl: text("logo_url"),
+});
+
 // === PRODUCTS & INVENTORY ===
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
