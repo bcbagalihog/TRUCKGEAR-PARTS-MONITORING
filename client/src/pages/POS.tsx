@@ -85,6 +85,27 @@ export default function POS() {
     queryFn: () => fetch("/api/sales-invoices").then((r) => r.json()),
   });
 
+  const { data: customerDirectory = [] } = useQuery<any[]>({
+    queryKey: ["/api/customers"],
+    queryFn: () => fetch("/api/customers").then((r) => r.json()),
+  });
+
+  const handleSelectCustomerFromDirectory = (id: string) => {
+    if (!id) return;
+    const found = customerDirectory.find((c) => String(c.id) === id);
+    if (found) {
+      setCustomer({
+        ...customer,
+        id: found.id,
+        name: found.name || "",
+        address: found.address || "",
+        tin: found.tin || "",
+        branchArea: found.branchArea || "",
+        internalRemarks: found.internalRemarks || "",
+      });
+    }
+  };
+
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: number; data: any }) => {
       const res = await fetch(`/api/sales-invoices/${id}`, {
@@ -532,7 +553,23 @@ export default function POS() {
 
           {/* --- ORIGINAL FORM SECTION (UNTOUCHED) --- */}
           {posTab === "new" && <>
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 grid grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 space-y-4">
+            {/* Customer Directory Selector */}
+            <div className="flex items-center gap-3 pb-3 border-b">
+              <label className="block text-xs font-bold text-blue-700 uppercase whitespace-nowrap">Select from Customer Directory</label>
+              <select
+                className="flex-1 border border-blue-200 bg-blue-50 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                value={customer.id ? String(customer.id) : ""}
+                onChange={(e) => handleSelectCustomerFromDirectory(e.target.value)}
+                data-testid="select-customer-directory"
+              >
+                <option value="">— Walk-in / Manual Entry —</option>
+                {customerDirectory.map((c) => (
+                  <option key={c.id} value={String(c.id)}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
@@ -637,6 +674,7 @@ export default function POS() {
                   />
                 </div>
               </div>
+            </div>
             </div>
           </div>
 
