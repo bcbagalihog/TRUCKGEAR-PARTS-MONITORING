@@ -757,6 +757,16 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/companies", isAuthenticated, async (req, res) => {
+    try {
+      const company = await storage.createCompany(req.body);
+      res.status(201).json(company);
+    } catch (e) {
+      console.error("company create error:", e);
+      res.status(500).json({ message: "Failed to create company" });
+    }
+  });
+
   app.put("/api/companies/:id", isAuthenticated, async (req, res) => {
     try {
       const company = await storage.upsertCompany(Number(req.params.id), req.body);
@@ -764,6 +774,18 @@ export async function registerRoutes(
     } catch (e) {
       console.error("company upsert error:", e);
       res.status(500).json({ message: "Failed to save company" });
+    }
+  });
+
+  app.delete("/api/companies/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (id === 1) return res.status(400).json({ message: "Cannot delete the primary company" });
+      await storage.deleteCompany(id);
+      res.json({ success: true });
+    } catch (e) {
+      console.error("company delete error:", e);
+      res.status(500).json({ message: "Failed to delete company" });
     }
   });
 

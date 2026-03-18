@@ -206,5 +206,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS role       VARCHAR NOT NULL DEFAULT '
 ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active  BOOLEAN NOT NULL DEFAULT TRUE;
 
+-- ── FIX SEQUENCES (important if companies were seeded with explicit IDs) ──
+-- Resets the auto-increment counter so new inserts don't conflict
+SELECT setval('companies_id_seq', COALESCE((SELECT MAX(id) FROM companies), 1));
+
 -- ── DONE ───────────────────────────────────────────────────
 -- All schema changes applied safely. No existing data was modified.

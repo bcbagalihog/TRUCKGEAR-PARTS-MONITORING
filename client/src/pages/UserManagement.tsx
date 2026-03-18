@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import {
   UserPlus, ShieldCheck, Lock, Unlock, Loader2,
-  Building2, ArrowLeft, Pencil, Trash2, X, Upload, ImagePlus, Save,
+  Building2, ArrowLeft, Pencil, Trash2, X, Upload, ImagePlus, Save, PlusCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-const COMPANY_DEFAULTS = [
-  { id: 1, name: "Truckgear", address: "1032 A. Bonifacio St. Brgy Balingasa Q.C", phone: "(02)85513863", tin: "", logoUrl: "" },
-  { id: 2, name: "Sister Company", address: "", phone: "", tin: "", logoUrl: "" },
-];
+const EMPTY_COMPANY = { name: "", address: "", phone: "", tin: "", logoUrl: "" };
 
 export default function UserManagement() {
   const { toast } = useToast();
@@ -22,12 +19,10 @@ export default function UserManagement() {
 
   const [newUser, setNewUser] = useState({ username: "", password: "", firstName: "", lastName: "", role: "staff", companyId: 1 });
 
-  // Edit user modal
   const [editUser, setEditUser] = useState<any>(null);
   const [editData, setEditData] = useState({ firstName: "", lastName: "", role: "staff", companyId: 1, newPassword: "" });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
-  // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -35,8 +30,14 @@ export default function UserManagement() {
   const [companyForms, setCompanyForms] = useState<any[]>([]);
   const [savingCompany, setSavingCompany] = useState<number | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState<number | null>(null);
+  const [deletingCompany, setDeletingCompany] = useState<number | null>(null);
+  const [confirmDeleteCompany, setConfirmDeleteCompany] = useState<any>(null);
+  const [isAddingCompany, setIsAddingCompany] = useState(false);
+  const [newCompany, setNewCompany] = useState({ ...EMPTY_COMPANY });
+  const [isSavingNew, setIsSavingNew] = useState(false);
   const logoInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
+  // Fetch on mount
   useEffect(() => { fetchAll(); }, []);
 
   const fetchAll = async () => {
@@ -50,13 +51,7 @@ export default function UserManagement() {
       const companiesData = companiesRes.ok ? await companiesRes.json() : [];
       setUsers(usersData);
       setCompanies(companiesData);
-
-      // Merge DB data with defaults
-      const merged = COMPANY_DEFAULTS.map(def => {
-        const fromDb = companiesData.find((c: any) => c.id === def.id);
-        return fromDb ? { ...def, ...fromDb } : { ...def };
-      });
-      setCompanyForms(merged);
+      setCompanyForms(companiesData.map((c: any) => ({ ...c })));
     } catch {
       toast({ title: "Error", description: "Could not load data.", variant: "destructive" });
     } finally {
@@ -65,8 +60,8 @@ export default function UserManagement() {
   };
 
   const getCompanyName = (companyId: number) => {
-    const c = companyForms.find(c => c.id === companyId);
-    return c?.name || (companyId === 1 ? "Truckgear" : "Sister Co.");
+    const c = companies.find(c => c.id === companyId);
+    return c?.name || `Company ${companyId}`;
   };
 
   // ── Create User ──
@@ -81,7 +76,7 @@ export default function UserManagement() {
       });
       if (res.ok) {
         toast({ title: "Account created!" });
-        setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "staff", companyId: 1 });
+        setNewUser({ username: "", password: "", firstName: "", lastName: "", role: "staff", companyId: companies[0]?.id || 1 });
         fetchAll();
       } else {
         const err = await res.json();
@@ -131,7 +126,7 @@ export default function UserManagement() {
   };
 
   // ── Delete User ──
-  const handleDelete = async () => {
+  const handleDeleteUser = async () => {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
@@ -148,7 +143,12 @@ export default function UserManagement() {
     finally { setIsDeleting(false); }
   };
 
-  // ── Company Save ──
+  // ── Company helpers ──
+  const updateCompanyForm = (id: number, field: string, value: string) => {
+    setCompanyForms(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  // ── Save Existing Company ──
   const handleSaveCompany = async (company: any) => {
     setSavingCompany(company.id);
     try {
@@ -158,7 +158,7 @@ export default function UserManagement() {
         body: JSON.stringify({ name: company.name, address: company.address, phone: company.phone, tin: company.tin, logoUrl: company.logoUrl }),
       });
       if (res.ok) {
-        toast({ title: `${company.name} saved` });
+        toast({ title: `${company.name || "Company"} saved` });
         fetchAll();
       } else {
         toast({ title: "Failed to save", variant: "destructive" });
@@ -167,8 +167,47 @@ export default function UserManagement() {
     finally { setSavingCompany(null); }
   };
 
-  const updateCompanyForm = (id: number, field: string, value: string) => {
-    setCompanyForms(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  // ── Add New Company ──
+  const handleAddCompany = async () => {
+    if (!newCompany.name.trim()) {
+      toast({ title: "Company name is required", variant: "destructive" });
+      return;
+    }
+    setIsSavingNew(true);
+    try {
+      const res = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newCompany),
+      });
+      if (res.ok) {
+        toast({ title: `${newCompany.name} added!` });
+        setNewCompany({ ...EMPTY_COMPANY });
+        setIsAddingCompany(false);
+        fetchAll();
+      } else {
+        toast({ title: "Failed to add company", variant: "destructive" });
+      }
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setIsSavingNew(false); }
+  };
+
+  // ── Delete Company ──
+  const handleDeleteCompany = async () => {
+    if (!confirmDeleteCompany) return;
+    setDeletingCompany(confirmDeleteCompany.id);
+    try {
+      const res = await fetch(`/api/companies/${confirmDeleteCompany.id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast({ title: `${confirmDeleteCompany.name} removed` });
+        setConfirmDeleteCompany(null);
+        fetchAll();
+      } else {
+        const err = await res.json();
+        toast({ title: "Cannot delete", description: err.message, variant: "destructive" });
+      }
+    } catch { toast({ title: "Network error", variant: "destructive" }); }
+    finally { setDeletingCompany(null); }
   };
 
   // ── Logo Upload ──
@@ -180,16 +219,16 @@ export default function UserManagement() {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       if (res.ok) {
         const { imageUrl } = await res.json();
-        updateCompanyForm(companyId, "logoUrl", imageUrl);
-        // Auto-save with the new logo
-        const updatedCompany = companyForms.find(c => c.id === companyId);
-        if (updatedCompany) {
+        const updatedForms = companyForms.map(c => c.id === companyId ? { ...c, logoUrl: imageUrl } : c);
+        setCompanyForms(updatedForms);
+        const updated = updatedForms.find(c => c.id === companyId);
+        if (updated) {
           await fetch(`/api/companies/${companyId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...updatedCompany, logoUrl: imageUrl }),
+            body: JSON.stringify(updated),
           });
-          toast({ title: "Logo uploaded and saved!" });
+          toast({ title: "Logo uploaded!" });
           fetchAll();
         }
       } else {
@@ -225,7 +264,7 @@ export default function UserManagement() {
         ))}
       </div>
 
-      {/* ══ USERS TAB ════════════════════════════════════ */}
+      {/* ══ USERS TAB ══ */}
       {activeTab === "users" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Create Form */}
@@ -272,12 +311,12 @@ export default function UserManagement() {
                     <label className="block text-xs font-semibold text-muted-foreground uppercase mb-1">Company</label>
                     <select className="w-full bg-background border border-input rounded-md p-2 text-sm outline-none focus:border-primary"
                       value={newUser.companyId} onChange={(e) => setNewUser({ ...newUser, companyId: Number(e.target.value) })}>
-                      {companyForms.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
                 </div>
                 <button disabled={isCreating} type="submit"
-                  className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-2.5 rounded-md transition-colors flex justify-center items-center">
+                  className="w-full mt-4 bg-primary hover:bg-primary/90 text-primary-foreground font-medium py-2.5 rounded-md transition-colors flex justify-center items-center gap-2">
                   {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Account"}
                 </button>
               </form>
@@ -353,16 +392,84 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* ══ COMPANY SETTINGS TAB ══════════════════════════ */}
+      {/* ══ COMPANY SETTINGS TAB ══ */}
       {activeTab === "companies" && (
-        <div className="space-y-6">
-          <p className="text-sm text-gray-500">Fill in the details for each company. These names appear in the Company dropdown when creating user accounts.</p>
-          {companyForms.map((company) => (
-            <div key={company.id} className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-5 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-blue-600" />
-                Company {company.id}: {company.name || "—"}
+        <div className="space-y-5">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-500">
+              {companyForms.length} {companyForms.length === 1 ? "company" : "companies"} registered.
+              Company names appear in user account dropdowns.
+            </p>
+            <button onClick={() => { setIsAddingCompany(true); setNewCompany({ ...EMPTY_COMPANY }); }}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
+              <PlusCircle className="h-4 w-4" /> Add Company
+            </button>
+          </div>
+
+          {/* ── Add Company Form ── */}
+          {isAddingCompany && (
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-5">
+              <h3 className="text-sm font-bold text-blue-800 mb-4 flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" /> New Company
               </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Company Name <span className="text-red-500">*</span></label>
+                  <input type="text" placeholder="e.g. Sister Company 3" autoFocus
+                    className="w-full border border-blue-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none font-bold"
+                    value={newCompany.name} onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Business Address</label>
+                  <input type="text" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                    value={newCompany.address} onChange={(e) => setNewCompany({ ...newCompany, address: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">Phone</label>
+                  <input type="text" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                    value={newCompany.phone} onChange={(e) => setNewCompany({ ...newCompany, phone: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 uppercase mb-1">TIN</label>
+                  <input type="text" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none font-mono"
+                    value={newCompany.tin} onChange={(e) => setNewCompany({ ...newCompany, tin: e.target.value })} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-4">
+                <button onClick={() => setIsAddingCompany(false)} className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50 transition-colors">Cancel</button>
+                <button onClick={handleAddCompany} disabled={isSavingNew}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-md transition-colors">
+                  {isSavingNew ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save New Company
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Existing Company Cards ── */}
+          {loading ? (
+            <div className="text-center py-12 text-gray-400"><Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />Loading companies...</div>
+          ) : companyForms.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+              No companies yet. Click "Add Company" to create one.
+            </div>
+          ) : companyForms.map((company) => (
+            <div key={company.id} className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+              <div className="flex items-start justify-between mb-5">
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-blue-600" />
+                  {company.name || `Company ${company.id}`}
+                  {company.id === 1 && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full normal-case tracking-normal">Primary</span>
+                  )}
+                </h3>
+                {company.id !== 1 && (
+                  <button onClick={() => setConfirmDeleteCompany(company)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-red-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded transition-colors">
+                    <Trash2 className="h-3.5 w-3.5" /> Remove
+                  </button>
+                )}
+              </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Logo */}
@@ -374,22 +481,12 @@ export default function UserManagement() {
                       <ImagePlus className="h-8 w-8 text-gray-300" />
                     )}
                   </div>
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    className="hidden"
+                  <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden"
                     ref={el => { logoInputRefs.current[company.id] = el; }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleLogoUpload(company.id, file);
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => logoInputRefs.current[company.id]?.click()}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoUpload(company.id, f); }} />
+                  <button type="button" onClick={() => logoInputRefs.current[company.id]?.click()}
                     disabled={uploadingLogo === company.id}
-                    className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 border rounded-md hover:bg-gray-50 transition-colors text-gray-600"
-                  >
+                    className="flex items-center gap-2 text-xs font-medium px-3 py-1.5 border rounded-md hover:bg-gray-50 transition-colors text-gray-600">
                     {uploadingLogo === company.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
                     {company.logoUrl ? "Change Logo" : "Upload Logo"}
                   </button>
@@ -399,7 +496,7 @@ export default function UserManagement() {
                   )}
                 </div>
 
-                {/* Company Details Form */}
+                {/* Fields */}
                 <div className="lg:col-span-2 grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Company Name</label>
@@ -409,23 +506,23 @@ export default function UserManagement() {
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Business Address</label>
                     <input type="text" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-                      value={company.address} onChange={(e) => updateCompanyForm(company.id, "address", e.target.value)} />
+                      value={company.address || ""} onChange={(e) => updateCompanyForm(company.id, "address", e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Phone</label>
                     <input type="text" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
-                      value={company.phone} onChange={(e) => updateCompanyForm(company.id, "phone", e.target.value)} />
+                      value={company.phone || ""} onChange={(e) => updateCompanyForm(company.id, "phone", e.target.value)} />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">TIN</label>
                     <input type="text" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none font-mono"
-                      value={company.tin} onChange={(e) => updateCompanyForm(company.id, "tin", e.target.value)} />
+                      value={company.tin || ""} onChange={(e) => updateCompanyForm(company.id, "tin", e.target.value)} />
                   </div>
                   <div className="col-span-2 flex justify-end">
                     <button type="button" onClick={() => handleSaveCompany(company)} disabled={savingCompany === company.id}
                       className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-md transition-colors">
                       {savingCompany === company.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                      Save Company
+                      Save Changes
                     </button>
                   </div>
                 </div>
@@ -435,7 +532,7 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* ══ EDIT USER MODAL ══════════════════════════════ */}
+      {/* ══ EDIT USER MODAL ══ */}
       {editUser && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
@@ -469,12 +566,14 @@ export default function UserManagement() {
                   <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Company</label>
                   <select className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                     value={editData.companyId} onChange={(e) => setEditData({ ...editData, companyId: Number(e.target.value) })}>
-                    {companyForms.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">New Password <span className="text-gray-400 normal-case font-normal">(leave blank to keep current)</span></label>
+                <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+                  New Password <span className="text-gray-400 normal-case font-normal">(leave blank to keep current)</span>
+                </label>
                 <input type="password" className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none font-mono"
                   placeholder="••••••••" value={editData.newPassword} onChange={(e) => setEditData({ ...editData, newPassword: e.target.value })} />
               </div>
@@ -491,7 +590,7 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* ══ DELETE CONFIRM MODAL ═════════════════════════ */}
+      {/* ══ DELETE USER MODAL ══ */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
@@ -505,14 +604,42 @@ export default function UserManagement() {
               </div>
             </div>
             <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 my-4">
-              You are about to permanently delete the account for <span className="font-bold">{deleteTarget.firstName} {deleteTarget.lastName}</span> (@{deleteTarget.username}).
+              Permanently delete the account for <span className="font-bold">{deleteTarget.firstName} {deleteTarget.lastName}</span> (@{deleteTarget.username})?
             </p>
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50 transition-colors">Cancel</button>
-              <button onClick={handleDelete} disabled={isDeleting}
+              <button onClick={handleDeleteUser} disabled={isDeleting}
                 className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-5 py-2 rounded-md transition-colors">
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ DELETE COMPANY MODAL ══ */}
+      {confirmDeleteCompany && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                <Building2 className="h-5 w-5 text-orange-600" />
+              </div>
+              <div>
+                <h2 className="font-bold text-gray-900">Remove Company?</h2>
+                <p className="text-sm text-gray-500">Users assigned to this company will keep their assignment but the company name will no longer appear.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 bg-orange-50 rounded-lg p-3 my-4 border border-orange-100">
+              Remove <span className="font-bold">{confirmDeleteCompany.name}</span> from the company list?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmDeleteCompany(null)} className="px-4 py-2 text-sm border rounded-md hover:bg-gray-50 transition-colors">Cancel</button>
+              <button onClick={handleDeleteCompany} disabled={deletingCompany === confirmDeleteCompany.id}
+                className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium px-5 py-2 rounded-md transition-colors">
+                {deletingCompany === confirmDeleteCompany.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Yes, Remove
               </button>
             </div>
           </div>

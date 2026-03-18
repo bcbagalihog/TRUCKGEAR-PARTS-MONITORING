@@ -109,7 +109,9 @@ export interface IStorage extends IAuthStorage {
 
   // Companies
   getCompanies(): Promise<any[]>;
+  createCompany(data: any): Promise<any>;
   upsertCompany(id: number, data: any): Promise<any>;
+  deleteCompany(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -841,6 +843,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(companies).orderBy(companies.id);
   }
 
+  async createCompany(data: any): Promise<any> {
+    const [created] = await db.insert(companies).values(data).returning();
+    return created;
+  }
+
   async upsertCompany(id: number, data: any): Promise<any> {
     const existing = await db.select().from(companies).where(eq(companies.id, id));
     if (existing.length > 0) {
@@ -850,6 +857,10 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db.insert(companies).values({ id, ...data }).returning();
       return created;
     }
+  }
+
+  async deleteCompany(id: number): Promise<void> {
+    await db.delete(companies).where(eq(companies.id, id));
   }
 
   async getSupplierChecksReport(startDate?: string, endDate?: string): Promise<{ checkId: number; counterReceiptId: number; vendorName: string; checkNo: string | null; bank: string | null; checkDate: string | null; amount: string }[]> {
