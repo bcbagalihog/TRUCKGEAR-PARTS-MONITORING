@@ -1107,5 +1107,112 @@ export async function registerRoutes(
     }
   });
 
+  // ── AI Bridge Endpoint ───────────────────────────────────────────────────
+  app.post("/api/ai/execute", async (req, res) => {
+    const token = req.headers["x-ai-bridge-token"];
+    const expectedToken = process.env.AI_BRIDGE_TOKEN;
+
+    if (!expectedToken || token !== expectedToken) {
+      return res.status(401).json({ success: false, error: "Unauthorized: invalid or missing AI_BRIDGE_TOKEN" });
+    }
+
+    const { action, entity, id, data, search } = req.body as {
+      action: string;
+      entity: string;
+      id?: number;
+      data?: any;
+      search?: string;
+    };
+
+    if (!action || !entity) {
+      return res.status(400).json({ success: false, error: "Missing required fields: action and entity" });
+    }
+
+    try {
+      // PRODUCTS
+      if (entity === "products") {
+        if (action === "list") {
+          const result = await storage.getProducts(search);
+          return res.json({ success: true, data: result });
+        }
+        if (action === "get") {
+          if (!id) return res.status(400).json({ success: false, error: "id required" });
+          const result = await storage.getProduct(id);
+          if (!result) return res.status(404).json({ success: false, error: "Product not found" });
+          return res.json({ success: true, data: result });
+        }
+        if (action === "create") {
+          if (!data) return res.status(400).json({ success: false, error: "data required" });
+          const { oemNumbers, compatibility, ...productData } = data;
+          const result = await storage.createProduct(productData, oemNumbers, compatibility);
+          return res.status(201).json({ success: true, data: result });
+        }
+        if (action === "update") {
+          if (!id) return res.status(400).json({ success: false, error: "id required" });
+          if (!data) return res.status(400).json({ success: false, error: "data required" });
+          const { oemNumbers, compatibility, ...productData } = data;
+          const result = await storage.updateProduct(id, productData, oemNumbers, compatibility);
+          return res.json({ success: true, data: result });
+        }
+        if (action === "delete") {
+          if (!id) return res.status(400).json({ success: false, error: "id required" });
+          await storage.deleteProduct(id);
+          return res.json({ success: true, message: "Product deleted" });
+        }
+      }
+
+      // CUSTOMERS
+      if (entity === "customers") {
+        if (action === "list") {
+          const result = await storage.getCustomers();
+          return res.json({ success: true, data: result });
+        }
+        if (action === "get") {
+          if (!id) return res.status(400).json({ success: false, error: "id required" });
+          const result = await storage.getCustomer(id);
+          if (!result) return res.status(404).json({ success: false, error: "Customer not found" });
+          return res.json({ success: true, data: result });
+        }
+        if (action === "create") {
+          if (!data) return res.status(400).json({ success: false, error: "data required" });
+          const result = await storage.createCustomer(data);
+          return res.status(201).json({ success: true, data: result });
+        }
+      }
+
+      // SALES ORDERS
+      if (entity === "sales_orders") {
+        if (action === "list") {
+          const result = await storage.getSalesOrders();
+          return res.json({ success: true, data: result });
+        }
+        if (action === "get") {
+          if (!id) return res.status(400).json({ success: false, error: "id required" });
+          const result = await storage.getSalesOrder(id);
+          if (!result) return res.status(404).json({ success: false, error: "Sales order not found" });
+          return res.json({ success: true, data: result });
+        }
+      }
+
+      // PURCHASE ORDERS
+      if (entity === "purchase_orders") {
+        if (action === "list") {
+          const result = await storage.getPurchaseOrders();
+          return res.json({ success: true, data: result });
+        }
+        if (action === "get") {
+          if (!id) return res.status(400).json({ success: false, error: "id required" });
+          const result = await storage.getPurchaseOrder(id);
+          if (!result) return res.status(404).json({ success: false, error: "Purchase order not found" });
+          return res.json({ success: true, data: result });
+        }
+      }
+
+      return res.status(400).json({ success: false, error: `Unknown entity '${entity}' or action '${action}'` });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, error: err.message || "Internal server error" });
+    }
+  });
+
   return httpServer;
 }
